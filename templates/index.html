@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Blitz Dashboard</title>
+    <script>
+        function analyze(proc, id) {
+            fetch(`/analyze/${proc}/${id}`, {method: "POST"})
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById("agent-output").innerText = data.response;
+                });
+        }
+    </script>
+</head>
+<body>
+    <div style="display:flex;">
+        <div style="width:300px;">
+            <h3>Blitz Dashboard</h3>
+            <form method="POST" action="/clear_all">
+                <button type="submit" style="margin-bottom: 10px;">Clear All</button>
+            </form>
+            <ul>
+                {% for key, name in procedures.items() %}
+                    <li><a href="/{{ key }}">{{ key }}</a></li>
+                {% endfor %}
+            </ul>
+        </div>
+        <div style="flex:1; padding:20px;">
+            <h2>Script Results for {{ proc_name }}</h2>
+
+            <form method="POST" action="/init/{{ proc_name }}">
+                <button type="submit">Init</button>
+            </form>
+
+            {% if records %}
+                <table>
+                    <thead>
+                        <tr>
+                            {% for key in display_keys %}
+                                <th>{{ key }}</th>
+                            {% endfor %}
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for rec in records %}
+                            <tr {% if rec['_analyzed'] %}style="background-color: #e6f2ff;"{% endif %}>
+                                {% for key in display_keys %}
+                                    <td>{{ rec['_json_pretty'][key] if key in rec['_json_pretty'] else '' }}</td>
+                                {% endfor %}
+                                <td>
+                                    <form method="get" action="{{ url_for('analyze', proc_name=proc_name, rec_id=loop.index0) }}">
+                                        <button type="submit">Analyze</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% endif %}
+
+        </div>
+    </div>
+</body>
+</html>

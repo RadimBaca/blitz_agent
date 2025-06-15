@@ -1,0 +1,11 @@
+Flask
+psycopg2-binary
+markdown
+python-dotenv
+sqlparse
+pyodbc
+langchain-core
+langchain-community
+langchain-openai
+pydantic
+chromadb
