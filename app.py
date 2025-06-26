@@ -16,13 +16,13 @@ app = Flask(__name__)
 
 # Seznam podporovaných procedur
 PROCEDURES = {
-    "Blitz First": "sp_BlitzFirst",
+    "Blitz": "sp_Blitz",
     "Blitz Index": "sp_BlitzIndex",
     "Blitz Cache": "sp_BlitzCache",
 }
 
 DISPLAY_KEYS = {
-    "Blitz First": ["Finding", "Priority", "URL"],
+    "Blitz": ["Finding", "Details", "Priority"],
     "Blitz Index": ["Finding", "Details: schema.table.index(indexid)", "Priority"],
     "Blitz Cache": ["Query Text", "Avg CPU (ms)", "Warnings"],
 }
@@ -57,7 +57,7 @@ def clear_all_route():
 
 @app.route("/")
 def home():
-    return redirect(url_for('procedure', proc_name="Blitz First"))
+    return redirect(url_for('procedure', proc_name="Blitz"))
 
 @app.route("/<proc_name>")
 def procedure(proc_name):

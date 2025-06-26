@@ -2,6 +2,7 @@
 <html>
 <head>
     <title>Blitz Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <script>
         function analyze(proc, id) {
             fetch(`/analyze/${proc}/${id}`, {method: "POST"})
@@ -14,7 +15,7 @@
 </head>
 <body>
     <div style="display:flex;">
-        <div style="width:300px;">
+        <div class="sidebar">
             <h3>Blitz Dashboard</h3>
             <form method="POST" action="/clear_all">
                 <button type="submit" style="margin-bottom: 10px;">Clear All</button>
@@ -25,7 +26,7 @@
                 {% endfor %}
             </ul>
         </div>
-        <div style="flex:1; padding:20px;">
+        <div class="content">
             <h2>Script Results for {{ proc_name }}</h2>
 
             <form method="POST" action="/init/{{ proc_name }}">

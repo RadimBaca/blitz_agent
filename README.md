@@ -9,6 +9,11 @@ It is a web application that runs in a Docker container and uses OpenAI LLM API.
 
 This application connects to a SQL Server instance and runs [Brent Ozar's First Responder scripts](https://github.com/BrentOzarULTD/SQL-Server-First-Responder-Kit).
 Therefore, you need to have the scripts installed on your SQL Server instance.
+In order to install the First Responder Kit, you simply clone the repository and run the `Install-All-Scripts.sql` script against your SQL Server. 
+
+```shell
+git clone https://github.com/BrentOzarULTD/SQL-Server-First-Responder-Kit
+```
 
 ## SQL Server Database Permissions
 
@@ -19,9 +24,15 @@ GO
 
 GRANT VIEW DATABASE STATE TO username;
 GRANT VIEW DEFINITION TO username;
+GRANT EXECUTE ON [dbo].[sp_Blitz] TO username;
 GRANT EXECUTE ON [dbo].[sp_BlitzFirst] TO username;
 GRANT EXECUTE ON [dbo].[sp_BlitzIndex] TO username;
 GRANT EXECUTE ON [dbo].[sp_BlitzCache] TO username;
+GRANT EXECUTE ON [dbo].[sp_BlitzBackups] TO username;
+GRANT EXECUTE ON [dbo].[sp_BlitzLock] TO username;
+GRANT EXECUTE ON [dbo].[sp_BlitzWho] TO username;
+GRANT EXECUTE ON [dbo].[sp_DatabaseRestore] TO username;
+GRANT EXECUTE ON [dbo].[sp_ineachdb] TO username;
 GO
 
 USE master
