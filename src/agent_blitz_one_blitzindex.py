@@ -19,8 +19,9 @@ import shelve
 
 # Init
 load_dotenv()
-current_dir = os.path.dirname(os.path.abspath(__file__))
-rag_directory = os.path.join(current_dir, "db", "chroma_db_firecrawl")
+# Always resolve vector store relative to project root, not src/
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+rag_directory = os.path.join(project_root, "db", "chroma_db_firecrawl")
 embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
 
 if not os.path.exists(rag_directory):

@@ -6,9 +6,8 @@ from markupsafe import Markup
 import sqlparse
 from dotenv import load_dotenv
 
-from agent_blitz_one_blitzindex import agent_executor
-from agent_blitz_one_blitzindex import initial_user_question_template
-import result_DAO as dao
+import src.agent_blitz_one_blitzindex as blitz_agent
+import src.result_DAO as dao
 
 
 load_dotenv()
@@ -102,7 +101,7 @@ def analyze(proc_name, rec_id):
         chat_history = dao.get_chat_history(proc_name, rec_id) or []
         chat_history.append(("user", user_input))
 
-        result = agent_executor.invoke({
+        result = blitz_agent.agent_executor.invoke({
             "input": user_input,
             "chat_history": chat_history
         })
@@ -112,10 +111,10 @@ def analyze(proc_name, rec_id):
 
     chat_history = dao.get_chat_history(proc_name, rec_id)
     if not chat_history:
-        user_question = initial_user_question_template.format(
+        user_question = blitz_agent.initial_user_question_template.format(
             PROCEDURES[proc_name], record["_full"], os.getenv("MSSQL_DB", "sqlbench")
         )
-        result = agent_executor.invoke({"input": user_question, "chat_history": []})
+        result = blitz_agent.agent_executor.invoke({"input": user_question, "chat_history": []})
         chat_history = [("user", user_question), ("ai", result["output"])]
         dao.store_chat_history(proc_name, rec_id, chat_history)
 

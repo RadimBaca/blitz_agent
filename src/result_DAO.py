@@ -57,9 +57,13 @@ def store_chat_history(proc_name: str, rec_id: int, chat_history):
 
 
 def clear_all():
-    for filename in glob.glob("kv_*.db"):
-        with shelve.open(filename.replace(".db", ""), writeback=True) as kv:
-            kv.clear()
+    # Remove all shelve files for records
+    for ext in [".dat", ".bak", ".dir"]:
+        for file in glob.glob(f"kv_*{ext}"):
+            try:
+                os.remove(file)
+            except Exception:
+                pass
     delete_all_chat_sessions()
 
 
