@@ -10,6 +10,25 @@ def temp_cwd(monkeypatch):
     orig_dir = os.getcwd()
     temp_dir = tempfile.mkdtemp()
     monkeypatch.chdir(temp_dir)
+    # Ensure testproc exists in Procedure_type
+    import sqlite3
+    db_dir = "db"
+    db_path = os.path.join(db_dir, "results.db")
+    if not os.path.exists(db_dir):
+        os.makedirs(db_dir)
+    if not os.path.exists(db_path):
+        # Trigger DB creation
+        import src.result_DAO as dao
+        dao._ensure_db()
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            "INSERT OR IGNORE INTO Procedure_type (display_name, procedure_name) VALUES (?, ?)",
+            ("Test Procedure", "testproc")
+        )
+        conn.commit()
+    finally:
+        conn.close()
     yield
     os.chdir(orig_dir)
     shutil.rmtree(temp_dir)
@@ -24,6 +43,7 @@ def test_store_and_get_all_records():
 
 def test_get_and_store_chat_history():
     chat_history = [("user", "hello"), ("ai", "hi")]
+    dao.store_records("testproc", [{}])
     dao.store_chat_history("testproc", 0, chat_history)
     loaded = dao.get_chat_history("testproc", 0)
     assert loaded == chat_history
