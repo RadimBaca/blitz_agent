@@ -15,6 +15,30 @@ def get_procedure_name(display_name: str) -> str:
     """Convert display name to actual procedure name for database operations"""
     return PROCEDURES.get(display_name, display_name)
 
+def get_database_error_message(error: Exception, context: str = "operation") -> str:
+    """
+    Generate user-friendly error messages for database connection issues.
+    
+    Args:
+        error: The exception that occurred
+        context: Context of where the error occurred (e.g., "initialization", "analysis")
+    
+    Returns:
+        A user-friendly error message string
+    """
+    error_str = str(error).lower()
+    
+    if "timeout" in error_str:
+        return f"Database connection timeout during {context}. The database server may be unavailable or overloaded."
+    elif "login" in error_str:
+        return f"Database login failed during {context}. Please check your database credentials."
+    elif "invalid object name" in error_str:
+        return f"Database procedure not found during {context}. Please ensure the required procedures exist."
+    elif "network" in error_str or "host" in error_str:
+        return f"Network connection failed during {context}. Please check your network connectivity."
+    else:
+        return f"Database connection failed during {context}. Please check your database connection and try again."
+
 load_dotenv()
 app = Flask(__name__)
 
@@ -86,62 +110,98 @@ def procedure(display_name):
 
 @app.route("/init/<display_name>", methods=["POST"])
 def init(display_name):
-    procedure = PROCEDURES[display_name]
-    with get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute(f"EXEC {procedure}")
+    try:
+        procedure = get_procedure_name(display_name)
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(f"EXEC {procedure}")
 
-        while cursor.description is None:
-            if not cursor.nextset():
-                return "No result sets returned from procedure.", 500
+            while cursor.description is None:
+                if not cursor.nextset():
+                    return f"<h1>Error</h1><p>No result sets returned from procedure {procedure}.</p><p><a href='{url_for('procedure', display_name=display_name)}'>← Back to {display_name}</a></p>", 500
 
-        columns = [desc[0] for desc in cursor.description]
-        rows = cursor.fetchall()
-        records = []
-        for row in rows:
-            full = dict(zip(columns, row))
-            # Apply serialization to both display and storage versions
-            serialized_full = safe_pretty_json(full)
-            records.append({
-                '_json_pretty': serialized_full,
-                '_full': serialized_full
-            })
+            columns = [desc[0] for desc in cursor.description]
+            rows = cursor.fetchall()
+            records = []
+            for row in rows:
+                full = dict(zip(columns, row))
+                # Apply serialization to both display and storage versions
+                serialized_full = safe_pretty_json(full)
+                records.append({
+                    '_json_pretty': serialized_full,
+                    '_full': serialized_full
+                })
 
-    dao.store_records(procedure, records)  # Pass actual procedure name
-    dao.delete_chat_sessions(get_procedure_name(display_name))
-    return redirect(url_for('procedure', display_name=display_name))
+        dao.store_records(procedure, records)  # Pass actual procedure name
+        dao.delete_chat_sessions(get_procedure_name(display_name))
+        return redirect(url_for('procedure', display_name=display_name))
+    
+    except Exception as e:
+        error_message = get_database_error_message(e, "initialization")
+        
+        return f"""
+        <h1>Database Connection Error</h1>
+        <p><strong>{error_message}</strong></p>
+        <p>Please verify:</p>
+        <ul>
+            <li>Database server is running</li>
+            <li>Network connectivity</li>
+            <li>Database credentials are correct</li>
+            <li>Required stored procedures exist</li>
+        </ul>
+        <p><strong>Technical details:</strong> {str(e)}</p>
+        <p><a href='{url_for('procedure', display_name=display_name)}'>← Back to {display_name}</a></p>
+        """, 500
 
 @app.route("/analyze/<display_name>/<int:rec_id>", methods=["GET", "POST"])
 def analyze(display_name, rec_id):
-    procedure_name = get_procedure_name(display_name)
-    record = dao.get_record(procedure_name, rec_id)
+    try:
+        procedure_name = get_procedure_name(display_name)
+        record = dao.get_record(procedure_name, rec_id)
 
-    if request.method == "POST":
-        user_input = request.form["user_input"]
-        chat_history = dao.get_chat_history(procedure_name, rec_id) or []
-        chat_history.append(("user", user_input))
+        if request.method == "POST":
+            user_input = request.form["user_input"]
+            chat_history = dao.get_chat_history(procedure_name, rec_id) or []
+            chat_history.append(("user", user_input))
 
-        result = blitz_agent.agent_executor.invoke({
-            "input": user_input,
-            "chat_history": chat_history
-        })
-        chat_history.append(("ai", result["output"]))
-        dao.store_chat_history(procedure_name, rec_id, chat_history)
-        return redirect(url_for("analyze", display_name=display_name, rec_id=rec_id))
+            result = blitz_agent.agent_executor.invoke({
+                "input": user_input,
+                "chat_history": chat_history
+            })
+            chat_history.append(("ai", result["output"]))
+            dao.store_chat_history(procedure_name, rec_id, chat_history)
+            return redirect(url_for("analyze", display_name=display_name, rec_id=rec_id))
 
-    chat_history = dao.get_chat_history(procedure_name, rec_id)
-    if not chat_history:
-        user_question = blitz_agent.initial_user_question_template.format(
-            PROCEDURES[display_name], record["_full"], os.getenv("MSSQL_DB", "sqlbench")
-        )
-        result = blitz_agent.agent_executor.invoke({"input": user_question, "chat_history": []})
-        chat_history = [("user", user_question), ("ai", result["output"])]
-        dao.store_chat_history(procedure_name, rec_id, chat_history)
+        chat_history = dao.get_chat_history(procedure_name, rec_id)
+        if not chat_history:
+            user_question = blitz_agent.initial_user_question_template.format(
+                get_procedure_name(display_name), record["_full"], os.getenv("MSSQL_DB", "sqlbench")
+            )
+            store_user_question = "\n".join(f"**{k}**: {v}" for k, v in record["_full"].items())
+            result = blitz_agent.agent_executor.invoke({"input": user_question, "chat_history": []})
+            chat_history = [("user", store_user_question), ("ai", result["output"])]
+            dao.store_chat_history(procedure_name, rec_id, chat_history)
 
-    return render_template("analyze.html",
-                           proc_name=display_name,
-                           rec_id=rec_id,
-                           chat_history=chat_history)
+        return render_template("analyze.html",
+                            proc_name=display_name,
+                            rec_id=rec_id,
+                            chat_history=chat_history)
+    except Exception as e:
+        error_message = get_database_error_message(e, "initialization")
+        
+        return f"""
+        <h1>Database Connection Error</h1>
+        <p><strong>{error_message}</strong></p>
+        <p>Please verify:</p>
+        <ul>
+            <li>Database server is running</li>
+            <li>Network connectivity</li>
+            <li>Database credentials are correct</li>
+            <li>Required stored procedures exist</li>
+        </ul>
+        <p><strong>Technical details:</strong> {str(e)}</p>
+        <p><a href='{url_for('procedure', display_name=display_name)}'>← Back to {display_name}</a></p>
+        """, 500
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=5000)
