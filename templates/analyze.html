@@ -2,29 +2,32 @@
 <html>
 <head>
     <title>Recommendation Analysis - {{ proc_name }}</title>
+    <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
+    <p><a href="{{ url_for('procedure', display_name=proc_name) }}">← Back</a></p>
+    
     <h2>Recommendation Chat: {{ proc_name }} - #{{ rec_id }}</h2>
 
+    <div class="chat-container">
+        {% for role, message in chat_history %}
+            {% if role == 'ai' %}
+                <div class="chat-message ai">
+                    <strong>AI:</strong>
+                    {{ message | markdown }}
+                </div>
+            {% elif role == 'user' %}
+                <div class="chat-message user">
+                    <strong>You:</strong>
+                    {{ message | markdown }}
+                </div>
+            {% endif %}
+            <hr class="chat-separator">
+        {% endfor %}
+    </div>
 
-    <p><a href="{{ url_for('procedure', display_name=proc_name) }}">← Back</a></p>
-    {% for role, message in chat_history %}
-        {% if role == 'ai' %}
-            <div style="margin-left: 20px; background-color: #f0f0f0; padding: 8px; border-radius: 5px;">
-                <p><strong>AI:</strong></p>
-                {{ message | markdown }}
-            </div>
-        {% elif role == 'user' %}
-            <div style="margin-left: 100px; background-color: #e6f7ff; padding: 8px; border-radius: 5px;">
-                <p><strong>You:</strong></p>
-                {{ message | markdown }}
-            </div>
-        {% endif %}
-        <hr>
-    {% endfor %}
-
-    <form method="post">
-        <textarea name="user_input" rows="4" cols="100" placeholder="Ask question..."></textarea><br>
+    <form method="post" class="chat-input-form">
+        <textarea name="user_input" rows="4" placeholder="Ask question..."></textarea><br>
         <button type="submit">Ask</button>
     </form>
 

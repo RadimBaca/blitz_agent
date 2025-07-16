@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Blitz Dashboard</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <title>Blitz Dashboard </title>
+    <link rel="stylesheet" href="/static/style.css">
     <script>
         function analyze(proc, id) {
             fetch(`/analyze/${proc}/${id}`, {method: "POST"})
@@ -18,7 +18,7 @@
         <div class="sidebar">
             <h3>Blitz Dashboard</h3>
             <form method="POST" action="/clear_all">
-                <button type="submit" style="margin-bottom: 10px;">Clear All</button>
+                <button type="submit">Clear All</button>
             </form>
             <ul>
                 {% for key, name in procedures.items() %}
@@ -59,6 +59,8 @@
                     </tbody>
                 </table>
             {% endif %}
+
+            <div id="agent-output"></div>
 
         </div>
     </div>
