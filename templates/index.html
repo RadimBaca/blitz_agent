@@ -50,7 +50,7 @@
                                     <td>{{ rec['_json_pretty'][key] if key in rec['_json_pretty'] else '' }}</td>
                                 {% endfor %}
                                 <td>
-                                    <form method="get" action="{{ url_for('analyze', proc_name=proc_name, rec_id=loop.index0) }}">
+                                    <form method="get" action="{{ url_for('analyze', display_name=proc_name, rec_id=loop.index0) }}">
                                         <button type="submit">Analyze</button>
                                     </form>
                                 </td>

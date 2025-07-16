@@ -5,10 +5,15 @@ import markdown
 from markupsafe import Markup
 import sqlparse
 from dotenv import load_dotenv
+import datetime
 
 import src.agent_blitz_one_blitzindex as blitz_agent
 import src.result_DAO as dao
 
+
+def get_procedure_name(display_name: str) -> str:
+    """Convert display name to actual procedure name for database operations"""
+    return PROCEDURES.get(display_name, display_name)
 
 load_dotenv()
 app = Flask(__name__)
@@ -31,17 +36,28 @@ def safe_pretty_json(record: dict) -> dict:
     for k, v in record.items():
         if k == "Query Text":
             safe_record[k] = sqlparse.format(v, keyword_case='upper', output_format='sql', reindent=True)
+        elif isinstance(v, datetime.datetime):
+            safe_record[k] = v.isoformat()
+        elif isinstance(v, datetime.date):
+            safe_record[k] = v.isoformat()
+        elif isinstance(v, datetime.time):
+            safe_record[k] = v.isoformat()
+        elif isinstance(v, bytes):
+            # Convert bytes to hex string for display
+            safe_record[k] = v.hex() if v else ''
         else:
             safe_record[k] = v
     return safe_record
 
 def get_connection():
     conn_str = (
-        f"DRIVER={{ODBC Driver 17 for SQL Server}};"
+        f"DRIVER={{ODBC Driver 18 for SQL Server}};"
         f"SERVER={os.getenv('MSSQL_HOST')};"
         f"DATABASE={os.getenv('MSSQL_DB')};"
         f"UID={os.getenv('MSSQL_USER')};"
-        f"PWD={os.getenv('MSSQL_PASSWORD')}"
+        f"PWD={os.getenv('MSSQL_PASSWORD')};"
+        f"TrustServerCertificate=yes;"
+        f"Encrypt=yes"
     )
     return pyodbc.connect(conn_str)
 
@@ -56,20 +72,21 @@ def clear_all_route():
 
 @app.route("/")
 def home():
-    return redirect(url_for('procedure', proc_name="Blitz"))
+    return redirect(url_for('procedure', display_name="Blitz"))
 
-@app.route("/<proc_name>")
-def procedure(proc_name):
-    records_with_flags = dao.get_all_records(proc_name)
+@app.route("/<display_name>")
+def procedure(display_name):
+    procedure_name = get_procedure_name(display_name)
+    records_with_flags = dao.get_all_records(procedure_name)
     return render_template("index.html",
-                           proc_name=proc_name,
+                           proc_name=display_name,
                            procedures=PROCEDURES,
                            records=records_with_flags,
-                           display_keys=DISPLAY_KEYS.get(proc_name, []))
+                           display_keys=DISPLAY_KEYS.get(display_name, []))
 
-@app.route("/init/<proc_name>", methods=["POST"])
-def init(proc_name):
-    procedure = PROCEDURES[proc_name]
+@app.route("/init/<display_name>", methods=["POST"])
+def init(display_name):
+    procedure = PROCEDURES[display_name]
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(f"EXEC {procedure}")
@@ -83,22 +100,25 @@ def init(proc_name):
         records = []
         for row in rows:
             full = dict(zip(columns, row))
+            # Apply serialization to both display and storage versions
+            serialized_full = safe_pretty_json(full)
             records.append({
-                '_json_pretty': safe_pretty_json(full),
-                '_full': full
+                '_json_pretty': serialized_full,
+                '_full': serialized_full
             })
 
-    dao.store_records(proc_name, records)
-    dao.delete_chat_sessions(proc_name)
-    return redirect(url_for('procedure', proc_name=proc_name))
+    dao.store_records(procedure, records)  # Pass actual procedure name
+    dao.delete_chat_sessions(get_procedure_name(display_name))
+    return redirect(url_for('procedure', display_name=display_name))
 
-@app.route("/analyze/<proc_name>/<int:rec_id>", methods=["GET", "POST"])
-def analyze(proc_name, rec_id):
-    record = dao.get_record(proc_name, rec_id)
+@app.route("/analyze/<display_name>/<int:rec_id>", methods=["GET", "POST"])
+def analyze(display_name, rec_id):
+    procedure_name = get_procedure_name(display_name)
+    record = dao.get_record(procedure_name, rec_id)
 
     if request.method == "POST":
         user_input = request.form["user_input"]
-        chat_history = dao.get_chat_history(proc_name, rec_id) or []
+        chat_history = dao.get_chat_history(procedure_name, rec_id) or []
         chat_history.append(("user", user_input))
 
         result = blitz_agent.agent_executor.invoke({
@@ -106,20 +126,20 @@ def analyze(proc_name, rec_id):
             "chat_history": chat_history
         })
         chat_history.append(("ai", result["output"]))
-        dao.store_chat_history(proc_name, rec_id, chat_history)
-        return redirect(url_for("analyze", proc_name=proc_name, rec_id=rec_id))
+        dao.store_chat_history(procedure_name, rec_id, chat_history)
+        return redirect(url_for("analyze", display_name=display_name, rec_id=rec_id))
 
-    chat_history = dao.get_chat_history(proc_name, rec_id)
+    chat_history = dao.get_chat_history(procedure_name, rec_id)
     if not chat_history:
         user_question = blitz_agent.initial_user_question_template.format(
-            PROCEDURES[proc_name], record["_full"], os.getenv("MSSQL_DB", "sqlbench")
+            PROCEDURES[display_name], record["_full"], os.getenv("MSSQL_DB", "sqlbench")
         )
         result = blitz_agent.agent_executor.invoke({"input": user_question, "chat_history": []})
         chat_history = [("user", user_question), ("ai", result["output"])]
-        dao.store_chat_history(proc_name, rec_id, chat_history)
+        dao.store_chat_history(procedure_name, rec_id, chat_history)
 
     return render_template("analyze.html",
-                           proc_name=proc_name,
+                           proc_name=display_name,
                            rec_id=rec_id,
                            chat_history=chat_history)
 

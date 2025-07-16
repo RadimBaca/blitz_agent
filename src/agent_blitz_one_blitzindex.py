@@ -52,11 +52,13 @@ def run_sqlserver_query_as_csv(query: str, params: tuple = (), max_rows: int = 5
         password = os.getenv("MSSQL_PASSWORD") # your password
 
         conn_str = (
-            f"DRIVER={{ODBC Driver 17 for SQL Server}};"
+            f"DRIVER={{ODBC Driver 18 for SQL Server}};"
             f"SERVER={server};"
             f"DATABASE={database};"
             f"UID={username};"
-            f"PWD={password}"
+            f"PWD={password};"
+            f"TrustServerCertificate=yes;"
+            f"Encrypt=yes;"
         )
         conn = pyodbc.connect(conn_str)
         cursor = conn.cursor()

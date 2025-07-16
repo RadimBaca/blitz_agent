@@ -25,6 +25,6 @@ CREATE TABLE Chat (
   pr_id INTEGER NOT NULL REFERENCES Procedure_result (pr_id)
 );
 
-INSERT INTO Procedure_type VALUES (1, 'Blitz', 'sp_blitz'),
+INSERT INTO Procedure_type VALUES (1, 'Blitz', 'sp_Blitz'),
                                  (2, 'Blitz Index', 'sp_BlitzIndex'),
                                  (3, 'Blitz Cache', 'sp_BlitzCache');
