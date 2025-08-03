@@ -55,6 +55,12 @@ DISPLAY_KEYS = {
     "Blitz Cache": ["Query Text", "Avg CPU (ms)", "Warnings"],
 }
 
+FILTERING = {
+    "Blitz": ["Finding", "Priority"],
+    "Blitz Index": ["Finding", "Priority"],
+    "Blitz Cache": ["Avg CPU (ms)"],
+}
+
 def safe_pretty_json(record: dict) -> dict:
     safe_record = {}
     for k, v in record.items():
@@ -76,12 +82,15 @@ def safe_pretty_json(record: dict) -> dict:
 def get_connection():
     conn_str = (
         f"DRIVER={{ODBC Driver 18 for SQL Server}};"
-        f"SERVER={os.getenv('MSSQL_HOST')};"
+        f"SERVER={os.getenv('MSSQL_HOST')},{os.getenv('MSSQL_PORT')};"
         f"DATABASE={os.getenv('MSSQL_DB')};"
         f"UID={os.getenv('MSSQL_USER')};"
         f"PWD={os.getenv('MSSQL_PASSWORD')};"
         f"TrustServerCertificate=yes;"
-        f"Encrypt=yes"
+        f"Encrypt=yes;"
+        f"Connection Timeout=60;"
+        f"Command Timeout=120;"
+        f"Authentication=SqlPassword"
     )
     return pyodbc.connect(conn_str)
 
@@ -111,14 +120,14 @@ def procedure(display_name):
 @app.route("/init/<display_name>", methods=["POST"])
 def init(display_name):
     try:
-        procedure = get_procedure_name(display_name)
+        procedure_name = get_procedure_name(display_name)
         with get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute(f"EXEC {procedure}")
+            cursor.execute(f"EXEC {procedure_name}")
 
             while cursor.description is None:
                 if not cursor.nextset():
-                    return f"<h1>Error</h1><p>No result sets returned from procedure {procedure}.</p><p><a href='{url_for('procedure', display_name=display_name)}'>← Back to {display_name}</a></p>", 500
+                    return f"<h1>Error</h1><p>No result sets returned from procedure {procedure_name}.</p><p><a href='{url_for('procedure', display_name=display_name)}'>← Back to {display_name}</a></p>", 500
 
             columns = [desc[0] for desc in cursor.description]
             rows = cursor.fetchall()
@@ -132,8 +141,8 @@ def init(display_name):
                     '_full': serialized_full
                 })
 
-        dao.store_records(procedure, records)  # Pass actual procedure name
-        dao.delete_chat_sessions(get_procedure_name(display_name))
+        dao.store_records(procedure_name, records) 
+        # dao.delete_chat_sessions(get_procedure_name(display_name))
         return redirect(url_for('procedure', display_name=display_name))
     
     except Exception as e:
@@ -161,6 +170,7 @@ def analyze(display_name, rec_id):
 
         if request.method == "POST":
             user_input = request.form["user_input"]
+            # TODO - replace with just adding to chat history (no rewriting)
             chat_history = dao.get_chat_history(procedure_name, rec_id) or []
             chat_history.append(("user", user_input))
 
@@ -203,7 +213,9 @@ def analyze(display_name, rec_id):
         <p><a href='{url_for('procedure', display_name=display_name)}'>← Back to {display_name}</a></p>
         """, 500
 
+PORT = int(os.getenv("APP_PORT", 5001))
+
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    app.run(debug=True, host="0.0.0.0", port=PORT)
 
 

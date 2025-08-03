@@ -36,18 +36,16 @@ def store_records(proc_name: str, records: list):
         if not row:
             raise ValueError(f"Procedure_type with procedure_name '{proc_name}' does not exist.")
         p_id = row[0]
-        # Remove all previous calls/results for this proc_name
-        pc_ids = [row[0] for row in conn.execute("SELECT pc_id FROM Procedure_call WHERE p_id = ?", (p_id,))]
-        for pc_id in pc_ids:
-            pr_ids = [row[0] for row in conn.execute("SELECT pr_id FROM Procedure_result WHERE pc_id = ?", (pc_id,))]
-            for pr_id in pr_ids:
-                conn.execute("DELETE FROM Chat WHERE pr_id = ?", (pr_id,))
-            conn.execute("DELETE FROM Procedure_result WHERE pc_id = ?", (pc_id,))
-            conn.execute("DELETE FROM Procedure_call WHERE pc_id = ?", (pc_id,))
+
+        delete_chat_sessions(proc_name)  
+        delete_results(proc_name)
+        conn.execute("DELETE FROM Procedure_call WHERE p_id = ?", (p_id,))
+
         # Insert a new Procedure_call
         conn.execute("INSERT INTO Procedure_call (run, p_id) VALUES (datetime('now'), ?)", (p_id,))
         pc_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
         for i, record in enumerate(records):
+            # print(f"Storing record {record}")
             conn.execute(
                 "INSERT INTO Procedure_result (result, procedure_order, pc_id) VALUES (?, ?, ?)",
                 (json.dumps(record), i, pc_id)
@@ -62,7 +60,11 @@ def get_all_records(proc_name: str):
     try:
         cur = conn.execute(
             """
-            SELECT pr.pr_id, pr.result, pr.procedure_order 
+            SELECT pr.result, 
+                pr.procedure_order,
+                (
+                    SELECT COUNT(*) FROM Chat WHERE pr_id = pr.pr_id
+                ) AS chat_count
             FROM Procedure_call pc
             JOIN Procedure_type pt ON pc.p_id = pt.p_id
             JOIN Procedure_result pr ON pr.pc_id = pc.pc_id
@@ -72,12 +74,10 @@ def get_all_records(proc_name: str):
         )
         records = []
         for rec in cur.fetchall():
-            pr_id, result_json, order = rec
+            result_json, order, chat_count = rec
             record = json.loads(result_json)
             record["_rec_id"] = order
-            # _analyzed: True if there is any chat for this pr_id
-            chat_cur = conn.execute("SELECT COUNT(*) FROM Chat WHERE pr_id = ?", (pr_id,))
-            record["_analyzed"] = chat_cur.fetchone()[0] > 0
+            record["_analyzed"] = chat_count > 0
             records.append(record)
         return records
     finally:
@@ -126,7 +126,7 @@ def store_chat_history(proc_name: str, rec_id: int, chat_history):
             raise IndexError("No record with this rec_id")
         pr_id = row[0]
         # Remove previous chat for this pr_id
-        conn.execute("DELETE FROM Chat WHERE pr_id = ?", (pr_id,))
+        delete_chat_session(pr_id)
         # Insert chat history as rows, one per tuple, preserving order
         for i, (role, msg) in enumerate(chat_history):
             conn.execute(
@@ -170,6 +170,22 @@ def clear_all():
     finally:
         conn.close()
 
+def delete_results(proc_name: str):
+    _ensure_db()
+    conn = _get_conn()
+    try:
+        conn.execute("""
+            DELETE FROM Procedure_result
+            WHERE pc_id IN (
+                SELECT pc.pc_id FROM Procedure_call pc
+                JOIN Procedure_type pt ON pc.p_id = pt.p_id
+                WHERE pt.procedure_name = ?
+            )
+        """, (proc_name,))
+        conn.commit()
+    finally:
+        conn.close()
+
 def delete_chat_sessions(proc_name: str):
     _ensure_db()
     conn = _get_conn()
@@ -186,3 +202,17 @@ def delete_chat_sessions(proc_name: str):
         conn.commit()
     finally:
         conn.close()
+
+
+def delete_chat_session(pr_id: int):
+    _ensure_db()
+    conn = _get_conn()
+    try:
+        conn.execute("""
+            DELETE FROM Chat
+            WHERE pr_id = ?
+        """, (pr_id,))
+        conn.commit()
+    finally:
+        conn.close()
+        
