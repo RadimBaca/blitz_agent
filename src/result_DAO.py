@@ -1,4 +1,3 @@
-import sqlite3
 import json
 from .connection_DAO import _ensure_db, _get_conn
 
@@ -16,7 +15,7 @@ def store_records(proc_name: str, records: list, db_id: int):
             raise ValueError(f"Procedure_type with procedure_name '{proc_name}' does not exist.")
         p_id = row[0]
 
-        delete_chat_sessions(proc_name, db_id)  
+        delete_chat_sessions(proc_name, db_id)
         delete_results(proc_name, db_id)
         conn.execute("DELETE FROM Procedure_call WHERE p_id = ? AND db_id = ?", (p_id, db_id))
 
@@ -41,7 +40,7 @@ def get_all_records(proc_name: str, db_id: int):
         cur = conn.execute("SELECT db_id FROM Database_connection WHERE db_id = ?", (db_id,))
         if not cur.fetchone():
             raise ValueError(f"Database connection with db_id '{db_id}' does not exist.")
-        
+
         cur = conn.execute(
             """
             SELECT pr.result, 
@@ -156,7 +155,7 @@ def clear_all(db_id: int):
                 WHERE pc.db_id = ?
             )
         """, (db_id,))
-        
+
         # Delete procedure results for this db_id
         conn.execute("""
             DELETE FROM Procedure_result
@@ -165,7 +164,7 @@ def clear_all(db_id: int):
                 WHERE pc.db_id = ?
             )
         """, (db_id,))
-        
+
         # Delete procedure calls for this db_id
         conn.execute("DELETE FROM Procedure_call WHERE db_id = ?", (db_id,))
         conn.commit()
@@ -217,4 +216,3 @@ def delete_chat_session(pr_id: int):
         conn.commit()
     finally:
         conn.close()
-        

@@ -79,22 +79,22 @@ def test_clear_all_with_multiple_db_ids():
     """Test that clear_all only affects the specified db_id"""
     records1 = [{"foo": "bar1"}]
     records2 = [{"foo": "bar2"}]
-    
+
     # Store records for both databases
     dao.store_records("testproc", records1, db_id=1)
     dao.store_records("testproc", records2, db_id=2)
-    
+
     # Store chat history for both
     dao.store_chat_history("testproc", 0, [("user", "hi from db1")])
-    # Need to get records for db2 to store chat
+    # Need to get records for db2 to store cha
     records_db2 = dao.get_all_records("testproc", db_id=2)
     if records_db2:
         dao.store_chat_history("testproc", 0, [("user", "hi from db2")])
-    
+
     # Clear only db_id=1
     dao.clear_all(db_id=1)
-    
-    # Verify db_id=1 is cleared but db_id=2 is intact
+
+    # Verify db_id=1 is cleared but db_id=2 is intac
     assert dao.get_all_records("testproc", db_id=1) == []
     assert dao.get_all_records("testproc", db_id=2) != []
     assert dao.get_all_records("testproc", db_id=2)[0]["foo"] == "bar2"
@@ -103,14 +103,14 @@ def test_delete_results_with_db_id():
     """Test that delete_results only affects the specified db_id"""
     records1 = [{"foo": "bar1"}]
     records2 = [{"foo": "bar2"}]
-    
+
     # Store records for both databases
     dao.store_records("testproc", records1, db_id=1)
     dao.store_records("testproc", records2, db_id=2)
-    
+
     # Delete results only for db_id=1
     dao.delete_results("testproc", db_id=1)
-    
+
     # Verify only db_id=1 results are deleted
     assert dao.get_all_records("testproc", db_id=1) == []
     assert dao.get_all_records("testproc", db_id=2) != []
@@ -120,20 +120,20 @@ def test_delete_chat_sessions_with_db_id():
     """Test that delete_chat_sessions only affects the specified db_id"""
     records1 = [{"foo": "bar1"}]
     records2 = [{"foo": "bar2"}]
-    
+
     # Store records for both databases
     dao.store_records("testproc", records1, db_id=1)
     dao.store_records("testproc", records2, db_id=2)
-    
+
     # Store chat history for both
     dao.store_chat_history("testproc", 0, [("user", "hi from db1")])
-    # For db2, we need to use its record index 
+    # For db2, we need to use its record index
     records_db2 = dao.get_all_records("testproc", db_id=2)
     if records_db2:
         dao.store_chat_history("testproc", 0, [("user", "hi from db2")])
-    
+
     # Delete chat sessions only for db_id=1
     dao.delete_chat_sessions("testproc", db_id=1)
-    
+
     # Verify chat history is deleted only for db_id=1
     assert dao.get_chat_history("testproc", 0) is None  # This should be None for db1

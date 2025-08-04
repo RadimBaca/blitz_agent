@@ -1,0 +1,158 @@
+[MAIN]
+# Specify a score threshold to be exceeded before program exits with error.
+fail-under=8.0
+
+# Add files or directories to the blacklist. They should be base names, not paths.
+ignore=CVS,__pycache__,.git
+
+# Use multiple processes to speed up Pylint.
+jobs=1
+
+# When enabled, pylint would attempt to guess common misconfiguration and emit
+# user-friendly hints instead of false-positive error messages.
+suggestion-mode=yes
+
+[MESSAGES CONTROL]
+# Disable the message, report, category or checker with the given id(s).
+disable=missing-module-docstring,
+        missing-class-docstring,
+        missing-function-docstring,
+        too-few-public-methods,
+        import-error,
+        line-too-long,
+        c-extension-no-member
+
+[REPORTS]
+# Python expression which should return a note less than 10 (10 is the highest note).
+evaluation=10.0 - ((float(5 * error + warning + refactor + convention) / statement) * 10)
+
+# Set the output format.
+output-format=text
+
+# Tells whether to display a full report or only the messages.
+reports=no
+
+# Activate the evaluation score.
+score=yes
+
+[REFACTORING]
+# Maximum number of nested blocks for function / method body
+max-nested-blocks=5
+
+[BASIC]
+# Naming style matching correct argument names.
+argument-naming-style=snake_case
+
+# Naming style matching correct attribute names.
+attr-naming-style=snake_case
+
+# Naming style matching correct class names.
+class-naming-style=PascalCase
+
+# Naming style matching correct constant names.
+const-naming-style=UPPER_CASE
+
+# Naming style matching correct function names.
+function-naming-style=snake_case
+
+# Naming style matching correct method names.
+method-naming-style=snake_case
+
+# Naming style matching correct module names.
+module-naming-style=snake_case
+
+# Naming style matching correct variable names.
+variable-naming-style=snake_case
+
+[FORMAT]
+# Number of spaces of indent required inside a hanging or continued line.
+indent-after-paren=4
+
+# String used as indentation unit.
+indent-string='    '
+
+# Maximum number of characters on a single line.
+max-line-length=100
+
+# Maximum number of lines in a module.
+max-module-lines=1000
+
+[TYPECHECK]
+# List of members which are set dynamically and missed by pylint inference system.
+generated-members=
+
+# Tells whether missing members accessed in mixin class should be ignored.
+ignore-mixin-members=yes
+
+# Tells whether to warn about missing members when the owner of the attribute is inferred to be None.
+ignore-none=yes
+
+# List of class names for which member attributes should not be checked.
+ignored-classes=optparse.Values,thread._local,_thread._local
+
+# List of module names for which member attributes should not be checked.
+ignored-modules=
+
+[VARIABLES]
+# List of additional names supposed to be defined in builtins.
+additional-builtins=
+
+# Tells whether unused global variables should be treated as a violation.
+allow-global-unused-variables=yes
+
+# List of strings which can identify a callback function by name.
+callbacks=cb_,_cb
+
+# A regular expression matching the name of dummy variables.
+dummy-variables-rgx=_+$|(_[a-zA-Z0-9_]*[a-zA-Z0-9]+?$)|dummy|^ignored_|^unused_
+
+# Argument names that match this expression will be ignored.
+ignored-argument-names=_.*|^ignored_|^unused_
+
+# Tells whether we should check for unused import in __init__ files.
+init-import=no
+
+[DESIGN]
+# Maximum number of arguments for function / method.
+max-args=5
+
+# Maximum number of attributes for a class.
+max-attributes=7
+
+# Maximum number of boolean expressions in an if statement.
+max-bool-expr=5
+
+# Maximum number of branch for function / method body.
+max-branches=12
+
+# Maximum number of locals for function / method body.
+max-locals=15
+
+# Maximum number of parents for a class.
+max-parents=7
+
+# Maximum number of public methods for a class.
+max-public-methods=20
+
+# Maximum number of return / yield for function / method body.
+max-returns=6
+
+# Maximum number of statements in function / method body.
+max-statements=50
+
+# Minimum number of public methods for a class.
+min-public-methods=2
+
+[IMPORTS]
+# Allow wildcard imports from modules that define __all__.
+allow-wildcard-with-all=no
+
+# Analyse import fallback blocks.
+analyse-fallback-blocks=no
+
+# Deprecated modules which should not be used.
+deprecated-modules=optparse,tkinter.tix
+
+[EXCEPTIONS]
+# Exceptions that will emit a warning when being caught.
+overgeneral-exceptions=builtins.BaseException,builtins.Exception

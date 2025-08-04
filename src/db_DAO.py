@@ -1,4 +1,3 @@
-import sqlite3
 from typing import Optional
 from pydantic import BaseModel, Field
 from .connection_DAO import _ensure_db, _get_conn
@@ -29,7 +28,7 @@ def get_db(db_id: int) -> Optional[DatabaseConnection]:
     """
     if not isinstance(db_id, int) or db_id <= 0:
         raise ValueError("db_id must be a positive integer")
-    
+
     _ensure_db()
     conn = _get_conn()
     try:
@@ -41,7 +40,7 @@ def get_db(db_id: int) -> Optional[DatabaseConnection]:
         row = cur.fetchone()
         if not row:
             return None
-        
+
         return DatabaseConnection(
             db_id=row[0],
             db_name=row[1],
@@ -71,7 +70,7 @@ def insert_db(db_connection: DatabaseConnection) -> int:
     # Validate the input using Pydantic
     if not isinstance(db_connection, DatabaseConnection):
         raise ValueError("db_connection must be a DatabaseConnection instance")
-    
+
     _ensure_db()
     conn = _get_conn()
     try:
@@ -109,7 +108,7 @@ def exists_db(host: str, port: int, user_name: str) -> int:
         raise ValueError("port must be an integer between 1 and 65535")
     if not user_name or not isinstance(user_name, str):
         raise ValueError("user_name must be a non-empty string")
-    
+
     _ensure_db()
     conn = _get_conn()
     try:
@@ -144,7 +143,7 @@ def delete_db(db_id: int) -> bool:
     """
     if not isinstance(db_id, int) or db_id <= 0:
         raise ValueError("db_id must be a positive integer")
-    
+
     _ensure_db()
     conn = _get_conn()
     try:

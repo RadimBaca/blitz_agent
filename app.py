@@ -117,7 +117,7 @@ def get_connection():
     try:
         # Get environment variables
         mssql_host = os.getenv('MSSQL_HOST')
-        mssql_port = int(os.getenv('MSSQL_PORT', 1433))
+        mssql_port = int(os.getenv('MSSQL_PORT', '1433'))
         mssql_user = os.getenv('MSSQL_USER')
         mssql_password = os.getenv('MSSQL_PASSWORD')
         mssql_db = os.getenv('MSSQL_DB')
@@ -168,7 +168,7 @@ def get_connection():
         
         return pyodbc.connect(conn_str)
     
-    except Exception as e:
+    except (pyodbc.Error, ValueError) as e:
         # If database connection management fails, fallback to direct environment connection
         print(f"Warning: Database connection management failed: {e}. Using direct environment connection.")
         actual_db_id = 1  # Use default id
@@ -341,7 +341,7 @@ def init(display_name):
         # dao.delete_chat_sessions(get_procedure_name(display_name), actual_db_id)
         return redirect(url_for('procedure', display_name=display_name))
     
-    except Exception as e:
+    except (pyodbc.Error, ValueError) as e:
         error_message = get_database_error_message(e, "initialization")
         
         return f"""
@@ -392,7 +392,7 @@ def analyze(display_name, rec_id):
                             proc_name=display_name,
                             rec_id=rec_id,
                             chat_history=chat_history)
-    except Exception as e:
+    except (pyodbc.Error, ValueError) as e:
         error_message = get_database_error_message(e, "initialization")
         
         return f"""
@@ -409,7 +409,7 @@ def analyze(display_name, rec_id):
         <p><a href='{url_for('procedure', display_name=display_name)}'>← Back to {display_name}</a></p>
         """, 500
 
-PORT = int(os.getenv("APP_PORT", 5001))
+PORT = int(os.getenv("APP_PORT", '5001'))
 
 if __name__ == "__main__":
     conn = get_connection()
