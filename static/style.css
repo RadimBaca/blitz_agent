@@ -116,9 +116,283 @@ button:hover {
     background-color: #f8f9fa;
 }
 
+/* Database selector styles */
+.db-selector {
+    margin-bottom: 15px;
+    padding: 10px;
+    border: 2px solid #ddd;
+    border-radius: 5px;
+    background-color: #fff;
+}
+
+.db-selector-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.db-selector select {
+    width: 150px;
+    padding: 6px 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 13px;
+    background-color: white;
+    height: 32px;
+    box-sizing: border-box;
+}
+
+.refresh-btn {
+    background: #f0f0f0 !important;
+    border: 1px solid #ccc !important;
+    border-radius: 50% !important;
+    width: 32px !important;
+    height: 32px !important;
+    cursor: pointer;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    margin: 0 !important;
+    padding: 0 !important;
+    font-size: 16px;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+.refresh-btn:hover {
+    background-color: #e0e0e0 !important;
+    transform: rotate(180deg) scale(1.1);
+}
+
+.delete-btn {
+    background: #ff4444 !important;
+    border: 1px solid #cc0000 !important;
+    border-radius: 50% !important;
+    width: 32px !important;
+    height: 32px !important;
+    cursor: pointer;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    margin: 0 !important;
+    padding: 0 !important;
+    font-size: 16px;
+    color: white !important;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+.delete-btn:hover {
+    background-color: #cc0000 !important;
+    transform: scale(1.1);
+}
+
+/* Administration page styles */
+.admin-section {
+    margin-bottom: 40px;
+    padding: 20px;
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    background-color: #f9f9f9;
+}
+
+.admin-section h3 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    color: #333;
+    border: none;
+    padding: 0;
+    background: none;
+    font-size: 20px;
+    text-align: left;
+}
+
+.db-form {
+    max-width: 500px;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+    color: #333;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+    box-sizing: border-box;
+}
+
+.form-group input:focus {
+    outline: none;
+    border-color: #007BFF;
+    box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
+}
+
+.form-actions {
+    margin-top: 20px;
+    display: flex;
+    gap: 10px;
+}
+
+.btn-primary {
+    background-color: #007BFF !important;
+    color: white !important;
+    border: 1px solid #007BFF !important;
+    padding: 10px 20px !important;
+    border-radius: 4px !important;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    margin: 0 !important;
+    font-size: 14px !important;
+    font-family: inherit !important;
+    transition: background-color 0.3s ease;
+}
+
+.btn-primary:hover {
+    background-color: #0056b3 !important;
+    transform: none !important;
+}
+
+.btn-secondary {
+    background-color: #6c757d !important;
+    color: white !important;
+    border: 1px solid #6c757d !important;
+    padding: 10px 20px !important;
+    border-radius: 4px !important;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    margin: 0 !important;
+    font-size: 14px !important;
+    font-family: inherit !important;
+    transition: background-color 0.3s ease;
+}
+
+.btn-secondary:hover {
+    background-color: #545b62 !important;
+    transform: none !important;
+}
+
+.connections-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+
+.connections-table th,
+.connections-table td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+}
+
+.connections-table th {
+    background-color: #f2f2f2;
+    font-weight: bold;
+}
+
+.active-connection {
+    background-color: #e6f3ff !important;
+}
+
+.status-active {
+    color: #28a745;
+    font-weight: bold;
+}
+
+.status-inactive {
+    color: #6c757d;
+}
+
+.btn-small {
+    background-color: #28a745 !important;
+    color: white !important;
+    border: 1px solid #28a745 !important;
+    padding: 5px 10px !important;
+    border-radius: 3px !important;
+    cursor: pointer;
+    font-size: 12px !important;
+    margin: 0 5px 0 0 !important;
+    transition: background-color 0.3s ease;
+}
+
+.btn-small:hover {
+    background-color: #218838 !important;
+    transform: none !important;
+}
+
+.btn-danger {
+    background-color: #dc3545 !important;
+    color: white !important;
+    border: 1px solid #dc3545 !important;
+    padding: 10px 20px !important;
+    border-radius: 4px !important;
+    cursor: pointer;
+    font-size: 14px !important;
+    font-family: inherit !important;
+    margin: 0 !important;
+    transition: background-color 0.3s ease;
+}
+
+.btn-danger:hover {
+    background-color: #c82333 !important;
+    transform: none !important;
+}
+
+.btn-copy {
+    background-color: #17a2b8 !important;
+    color: white !important;
+    border: 1px solid #17a2b8 !important;
+    padding: 10px 20px !important;
+    border-radius: 4px !important;
+    cursor: pointer;
+    font-size: 14px !important;
+    font-family: inherit !important;
+    margin: 0 5px 0 0 !important;
+    transition: background-color 0.3s ease;
+}
+
+.btn-copy:hover {
+    background-color: #138496 !important;
+    transform: none !important;
+}
+
 .content {
     flex: 1;
     padding: 20px;
+}
+
+.content-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.content-header h2 {
+    margin: 0;
+}
+
+.admin-link {
+    background-color: #6c757d;
+    color: white !important;
+    text-decoration: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-size: 14px;
+    transition: background-color 0.3s ease;
+}
+
+.admin-link:hover {
+    background-color: #545b62;
 }
 
 .sidebar ul {
