@@ -1,32 +1,11 @@
-import os
 import sqlite3
 import json
+from .connection_DAO import _ensure_db, _get_conn
 
-DB_DIR = "db"
-DB_PATH = os.path.join(DB_DIR, "results.db")
-INIT_SQL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "init_results_db.sql")
-
-def _ensure_db():
-    if not os.path.exists(DB_DIR):
-        os.makedirs(DB_DIR)
-    if not os.path.exists(DB_PATH):
-        with open(INIT_SQL_PATH, "r", encoding="utf-8") as f:
-            sql = f.read()
-        conn = sqlite3.connect(DB_PATH)
-        try:
-            for stmt in sql.split(";"):
-                if stmt.strip():
-                    conn.execute(stmt)
-            conn.commit()
-        finally:
-            conn.close()
-
+# Initialize database on module import
 _ensure_db()
 
-def _get_conn():
-    return sqlite3.connect(DB_PATH)
-
-def store_records(proc_name: str, records: list):
+def store_records(proc_name: str, records: list, db_id: int):
     _ensure_db()
     conn = _get_conn()
     try:
@@ -37,12 +16,12 @@ def store_records(proc_name: str, records: list):
             raise ValueError(f"Procedure_type with procedure_name '{proc_name}' does not exist.")
         p_id = row[0]
 
-        delete_chat_sessions(proc_name)  
-        delete_results(proc_name)
-        conn.execute("DELETE FROM Procedure_call WHERE p_id = ?", (p_id,))
+        delete_chat_sessions(proc_name, db_id)  
+        delete_results(proc_name, db_id)
+        conn.execute("DELETE FROM Procedure_call WHERE p_id = ? AND db_id = ?", (p_id, db_id))
 
-        # Insert a new Procedure_call
-        conn.execute("INSERT INTO Procedure_call (run, p_id) VALUES (datetime('now'), ?)", (p_id,))
+        # Insert a new Procedure_call with db_id
+        conn.execute("INSERT INTO Procedure_call (run, p_id, db_id) VALUES (datetime('now'), ?, ?)", (p_id, db_id))
         pc_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
         for i, record in enumerate(records):
             # print(f"Storing record {record}")
@@ -54,10 +33,15 @@ def store_records(proc_name: str, records: list):
     finally:
         conn.close()
 
-def get_all_records(proc_name: str):
+def get_all_records(proc_name: str, db_id: int):
     _ensure_db()
     conn = _get_conn()
     try:
+        # Validate that db_id exists
+        cur = conn.execute("SELECT db_id FROM Database_connection WHERE db_id = ?", (db_id,))
+        if not cur.fetchone():
+            raise ValueError(f"Database connection with db_id '{db_id}' does not exist.")
+        
         cur = conn.execute(
             """
             SELECT pr.result, 
@@ -68,9 +52,9 @@ def get_all_records(proc_name: str):
             FROM Procedure_call pc
             JOIN Procedure_type pt ON pc.p_id = pt.p_id
             JOIN Procedure_result pr ON pr.pc_id = pc.pc_id
-            WHERE pt.procedure_name = ?
+            WHERE pt.procedure_name = ? AND pc.db_id = ?
             ORDER BY pc.run DESC, pr.procedure_order ASC
-            """, (proc_name,)
+            """, (proc_name, db_id)
         )
         records = []
         for rec in cur.fetchall():
@@ -159,18 +143,36 @@ def get_chat_history(proc_name: str, rec_id: int):
     finally:
         conn.close()
 
-def clear_all():
+def clear_all(db_id: int):
     _ensure_db()
     conn = _get_conn()
     try:
-        conn.execute("DELETE FROM Chat")
-        conn.execute("DELETE FROM Procedure_result")
-        conn.execute("DELETE FROM Procedure_call")
+        # Delete chat sessions for this db_id
+        conn.execute("""
+            DELETE FROM Chat
+            WHERE pr_id IN (
+                SELECT pr.pr_id FROM Procedure_call pc
+                JOIN Procedure_result pr ON pr.pc_id = pc.pc_id
+                WHERE pc.db_id = ?
+            )
+        """, (db_id,))
+        
+        # Delete procedure results for this db_id
+        conn.execute("""
+            DELETE FROM Procedure_result
+            WHERE pc_id IN (
+                SELECT pc.pc_id FROM Procedure_call pc
+                WHERE pc.db_id = ?
+            )
+        """, (db_id,))
+        
+        # Delete procedure calls for this db_id
+        conn.execute("DELETE FROM Procedure_call WHERE db_id = ?", (db_id,))
         conn.commit()
     finally:
         conn.close()
 
-def delete_results(proc_name: str):
+def delete_results(proc_name: str, db_id: int):
     _ensure_db()
     conn = _get_conn()
     try:
@@ -179,14 +181,14 @@ def delete_results(proc_name: str):
             WHERE pc_id IN (
                 SELECT pc.pc_id FROM Procedure_call pc
                 JOIN Procedure_type pt ON pc.p_id = pt.p_id
-                WHERE pt.procedure_name = ?
+                WHERE pt.procedure_name = ? AND pc.db_id = ?
             )
-        """, (proc_name,))
+        """, (proc_name, db_id))
         conn.commit()
     finally:
         conn.close()
 
-def delete_chat_sessions(proc_name: str):
+def delete_chat_sessions(proc_name: str, db_id: int):
     _ensure_db()
     conn = _get_conn()
     try:
@@ -196,9 +198,9 @@ def delete_chat_sessions(proc_name: str):
                 SELECT pr.pr_id FROM Procedure_call pc
                 JOIN Procedure_type pt ON pc.p_id = pt.p_id
                 JOIN Procedure_result pr ON pr.pc_id = pc.pc_id
-                WHERE pt.procedure_name = ?
+                WHERE pt.procedure_name = ? AND pc.db_id = ?
             )
-        """, (proc_name,))
+        """, (proc_name, db_id))
         conn.commit()
     finally:
         conn.close()
