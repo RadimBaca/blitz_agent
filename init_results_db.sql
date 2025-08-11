@@ -60,6 +60,7 @@ CREATE TABLE Procedure_blitzcache (
   pc_id INTEGER NOT NULL REFERENCES Procedure_call (pc_id),
   query_text TEXT,
   avg_cpu_ms REAL,
+  total_cpu_ms REAL,
   warnings TEXT
 );
 

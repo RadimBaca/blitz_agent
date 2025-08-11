@@ -17,8 +17,22 @@
                     <thead>
                         <tr>
                             <th>Query Text</th>
-                            <th>Avg CPU (ms)</th>
-                            <th>Total CPU (ms)</th>
+                            <th class="sortable">
+                                <a href="{{ url_for('procedure', display_name=proc_name, sort_by='avg_cpu_ms', sort_order='desc' if current_sort_by != 'avg_cpu_ms' or current_sort_order == 'asc' else 'asc') }}">
+                                    Avg CPU (ms)
+                                    {% if current_sort_by == 'avg_cpu_ms' %}
+                                        {% if current_sort_order == 'desc' %}↓{% else %}↑{% endif %}
+                                    {% endif %}
+                                </a>
+                            </th>
+                            <th class="sortable">
+                                <a href="{{ url_for('procedure', display_name=proc_name, sort_by='total_cpu_ms', sort_order='desc' if current_sort_by != 'total_cpu_ms' or current_sort_order == 'asc' else 'asc') }}">
+                                    Total CPU (ms)
+                                    {% if current_sort_by == 'total_cpu_ms' %}
+                                        {% if current_sort_order == 'desc' %}↓{% else %}↑{% endif %}
+                                    {% endif %}
+                                </a>
+                            </th>
                             <th>Warnings</th>
                             <th>Action</th>
                         </tr>

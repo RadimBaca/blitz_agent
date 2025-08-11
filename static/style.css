@@ -440,6 +440,27 @@ table th {
     border-bottom: 2px solid #dee2e6;
 }
 
+table th.sortable a {
+    color: #333;
+    text-decoration: none;
+    display: block;
+    padding: 0;
+    cursor: pointer;
+    transition: color 0.3s ease;
+}
+
+table th.sortable a:hover {
+    color: #007BFF;
+}
+
+table th.sortable {
+    padding: 0;
+}
+
+table th.sortable a {
+    padding: 12px 15px;
+}
+
 table tbody tr:nth-child(even) {
     background-color: #f8f9fa;
 }

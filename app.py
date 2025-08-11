@@ -218,12 +218,6 @@ def procedure(display_name):
     if display_name == 'favicon.ico':
         return '', 404
         
-    procedure_name = get_procedure_name(display_name)
-    blitz_records = dao.get_all_records(procedure_name, get_actual_db_id())
-    # Pass Pydantic models directly to template
-    # Get fresh list of connections for the combobox
-    current_connections = db_dao.get_all_db_connections()
-    
     # Determine which template to use based on display_name
     if display_name == "Blitz":
         template_name = "blitz.html"
@@ -232,19 +226,38 @@ def procedure(display_name):
     elif display_name == "Blitz Cache":
         template_name = "blitzcache.html"
     else:
-        # For not found pages, we still need to pass the required template variables
         return render_template("notfound.html",
-                               proc_name=display_name,
-                               procedures=PROCEDURES,
-                               connections=current_connections,
-                               actual_db_id=get_actual_db_id()), 404
+                           proc_name=display_name,
+                           procedures=PROCEDURES,
+                           actual_db_id=get_actual_db_id())
+
+    procedure_name = get_procedure_name(display_name)
+    blitz_records = dao.get_all_records(procedure_name, get_actual_db_id())
+    
+    # Handle sorting for BlitzCache
+    if display_name == "Blitz Cache":
+        sort_by = request.args.get('sort_by')
+        sort_order = request.args.get('sort_order', 'desc')  # Default to descending
+        
+        if sort_by in ['avg_cpu_ms', 'total_cpu_ms']:
+            reverse = (sort_order == 'desc')
+            # Sort records, handling None values by placing them at the end
+            blitz_records = sorted(blitz_records, 
+                                 key=lambda x: getattr(x, sort_by) or 0, 
+                                 reverse=reverse)
+    
+    # Pass Pydantic models directly to template
+    # Get fresh list of connections for the combobox
+    current_connections = db_dao.get_all_db_connections()
     
     return render_template(template_name,
                            proc_name=display_name,
                            procedures=PROCEDURES,
                            records=blitz_records,
                            connections=current_connections,
-                           actual_db_id=get_actual_db_id())
+                           actual_db_id=get_actual_db_id(),
+                           current_sort_by=request.args.get('sort_by'),
+                           current_sort_order=request.args.get('sort_order', 'desc'))
 
 @app.route("/init/<display_name>", methods=["POST"])
 def init(display_name):
