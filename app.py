@@ -21,29 +21,50 @@ def get_procedure_name(display_name: str) -> str:
     """Convert display name to actual procedure name for database operations"""
     return PROCEDURES.get(display_name, display_name)
 
-def get_database_error_message(error: Exception, context: str = "operation") -> str:
+def get_database_error_message(error: Exception, context: str = "operation", display_name: str = None) -> tuple:
     """
-    Generate user-friendly error messages for database connection issues.
+    Generate user-friendly error messages and HTML response for database connection issues.
     
     Args:
         error: The exception that occurred
         context: Context of where the error occurred (e.g., "initialization", "analysis")
+        display_name: The display name for the back link (optional)
     
     Returns:
-        A user-friendly error message string
+        A tuple of (HTML response string, HTTP status code)
     """
     error_str = str(error).lower()
     
     if "timeout" in error_str:
-        return f"Database connection timeout during {context}. The database server may be unavailable or overloaded."
+        error_message = f"Database connection timeout during {context}. The database server may be unavailable or overloaded."
     elif "login" in error_str:
-        return f"Database login failed during {context}. Please check your database credentials."
+        error_message = f"Database login failed during {context}. Please check your database credentials."
     elif "invalid object name" in error_str:
-        return f"Database procedure not found during {context}. Please ensure the required procedures exist."
+        error_message = f"Database procedure not found during {context}. Please ensure the required procedures exist."
     elif "network" in error_str or "host" in error_str:
-        return f"Network connection failed during {context}. Please check your network connectivity."
+        error_message = f"Network connection failed during {context}. Please check your network connectivity."
     else:
-        return f"Database connection failed during {context}. Please check your database connection and try again."
+        error_message = f"Database connection failed during {context}. Please check your database connection and try again."
+    
+    back_link = ""
+    if display_name:
+        back_link = f"<p><a href='{url_for('procedure', display_name=display_name)}'>← Back to {display_name}</a></p>"
+    
+    html_response = f"""
+    <h1>Database Connection Error</h1>
+    <p><strong>{error_message}</strong></p>
+    <p>Please verify:</p>
+    <ul>
+        <li>Database server is running</li>
+        <li>Network connectivity</li>
+        <li>Database credentials are correct</li>
+        <li>Required stored procedures exist</li>
+    </ul>
+    <p><strong>Technical details:</strong> {str(error)}</p>
+    {back_link}
+    """
+    
+    return html_response, 500
 
 
 # Seznam podporovaných procedur
@@ -53,17 +74,6 @@ PROCEDURES = {
     "Blitz Cache": "sp_BlitzCache",
 }
 
-DISPLAY_KEYS = {
-    "Blitz": ["Finding", "Details", "Priority"],
-    "Blitz Index": ["Finding", "Details: schema.table.index(indexid)", "Priority"],
-    "Blitz Cache": ["Query Text", "Avg CPU (ms)", "Warnings"],
-}
-
-FILTERING = {
-    "Blitz": ["Finding", "Priority"],
-    "Blitz Index": ["Finding", "Priority"],
-    "Blitz Cache": ["Avg CPU (ms)"],
-}
 
 def safe_pretty_json(record: dict) -> dict:
     safe_record = {}
@@ -233,7 +243,6 @@ def procedure(display_name):
                            proc_name=display_name,
                            procedures=PROCEDURES,
                            records=blitz_records,
-                           display_keys=DISPLAY_KEYS.get(display_name, []),
                            connections=current_connections,
                            actual_db_id=get_actual_db_id())
 
@@ -241,9 +250,19 @@ def procedure(display_name):
 def init(display_name):
     try:
         procedure_name = get_procedure_name(display_name)
+        
+        # Get database name for procedures that require it
+        db_connection = db_dao.get_db(get_actual_db_id())
+        database_name = db_connection.db_name if db_connection else None
+        
         with get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute(f"EXEC {procedure_name}")
+            
+            # Add @DatabaseName parameter for sp_BlitzCache and sp_BlitzIndex
+            if procedure_name in ['sp_BlitzCache', 'sp_BlitzIndex'] and database_name:
+                cursor.execute(f"EXEC {procedure_name} @DatabaseName = ?", (database_name,))
+            else:
+                cursor.execute(f"EXEC {procedure_name}")
 
             while cursor.description is None:
                 if not cursor.nextset():
@@ -264,21 +283,7 @@ def init(display_name):
         return redirect(url_for('procedure', display_name=display_name))
     
     except (pyodbc.Error, ValueError) as e:
-        error_message = get_database_error_message(e, "initialization")
-        
-        return f"""
-        <h1>Database Connection Error</h1>
-        <p><strong>{error_message}</strong></p>
-        <p>Please verify:</p>
-        <ul>
-            <li>Database server is running</li>
-            <li>Network connectivity</li>
-            <li>Database credentials are correct</li>
-            <li>Required stored procedures exist</li>
-        </ul>
-        <p><strong>Technical details:</strong> {str(e)}</p>
-        <p><a href='{url_for('procedure', display_name=display_name)}'>← Back to {display_name}</a></p>
-        """, 500
+        return get_database_error_message(e, "initialization", display_name)
 
 @app.route("/analyze/<display_name>/<int:rec_id>", methods=["GET", "POST"])
 def analyze(display_name, rec_id):
@@ -320,21 +325,7 @@ def analyze(display_name, rec_id):
                             connections=db_dao.get_all_db_connections(),
                             actual_db_id=get_actual_db_id())
     except (pyodbc.Error, ValueError) as e:
-        error_message = get_database_error_message(e, "initialization")
-        
-        return f"""
-        <h1>Database Connection Error</h1>
-        <p><strong>{error_message}</strong></p>
-        <p>Please verify:</p>
-        <ul>
-            <li>Database server is running</li>
-            <li>Network connectivity</li>
-            <li>Database credentials are correct</li>
-            <li>Required stored procedures exist</li>
-        </ul>
-        <p><strong>Technical details:</strong> {str(e)}</p>
-        <p><a href='{url_for('procedure', display_name=display_name)}'>← Back to {display_name}</a></p>
-        """, 500
+        return get_database_error_message(e, "analysis", display_name)
 
 PORT = int(os.getenv("APP_PORT", '5001'))
 

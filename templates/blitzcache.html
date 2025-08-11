@@ -18,6 +18,7 @@
                         <tr>
                             <th>Query Text</th>
                             <th>Avg CPU (ms)</th>
+                            <th>Total CPU (ms)</th>
                             <th>Warnings</th>
                             <th>Action</th>
                         </tr>
@@ -26,14 +27,19 @@
                         {% for rec in records %}
                             <tr {% if rec._analyzed %}style="background-color: #e6f2ff;"{% endif %}>
                                 <td class="query-text">
-                                    <div class="query-preview">
-                                        {{ rec.query_text[:100] if rec.query_text else '' }}
-                                        {% if rec.query_text and rec.query_text|length > 100 %}...{% endif %}
+                                    <div class="query-preview" title="{{ rec.query_text if rec.query_text else '' }}">
+                                        {{ rec.query_text[:150] if rec.query_text else '' }}
+                                        {% if rec.query_text and rec.query_text|length > 150 %}...{% endif %}
                                     </div>
                                 </td>
                                 <td class="cpu-metric">
                                     {% if rec.avg_cpu_ms %}
                                         <span class="cpu-value">{{ "%.2f"|format(rec.avg_cpu_ms) }}</span>
+                                    {% endif %}
+                                </td>
+                                <td class="cpu-metric">
+                                    {% if rec.total_cpu_ms %}
+                                        <span class="cpu-value">{{ "%.2f"|format(rec.total_cpu_ms) }}</span>
                                     {% endif %}
                                 </td>
                                 <td class="warnings">{{ rec.warnings if rec.warnings else '' }}</td>
