@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block title %}Page Not Found - Blitz Dashboard{% endblock %}
+
+{% block page_header %}Page Not Found{% endblock %}
+
+{% block load_form %}
+<!-- No load form needed for not found page -->
+{% endblock %}
+
+{% block content %}
+    <div class="error-page">
+        <h3>Sorry, the requested page could not be found.</h3>
+        <p>The procedure or page you're looking for doesn't exist or may have been moved.</p>
+        
+        <div class="available-procedures">
+            <h4>Available procedures:</h4>
+            <ul>
+                {% for key, name in procedures.items() %}
+                    <li><a href="/{{ key }}">{{ key }}</a> ({{ name }})</li>
+                {% endfor %}
+            </ul>
+        </div>
+        
+        <p><a href="/" class="btn-primary">← Go to Home</a></p>
+    </div>
+{% endblock %}

@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block title %}Blitz Cache Results - Blitz Dashboard{% endblock %}
+
+{% block page_header %}Blitz Cache Results for {{ proc_name }}{% endblock %}
+
+{% block load_button_text %}Load Blitz Cache Results{% endblock %}
+
+{% block content %}
+
+            {% if records %}
+                <div class="blitzcache-summary">
+                    <h3>SQL Server Plan Cache Analysis Summary</h3>
+                    <p>Found {{ records|length }} cached query plans. Items highlighted in blue have been analyzed.</p>
+                </div>
+                
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Query Text</th>
+                            <th>Avg CPU (ms)</th>
+                            <th>Warnings</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for rec in records %}
+                            <tr {% if rec._analyzed %}style="background-color: #e6f2ff;"{% endif %}>
+                                <td class="query-text">
+                                    <div class="query-preview">
+                                        {{ rec.query_text[:100] if rec.query_text else '' }}
+                                        {% if rec.query_text and rec.query_text|length > 100 %}...{% endif %}
+                                    </div>
+                                </td>
+                                <td class="cpu-metric">
+                                    {% if rec.avg_cpu_ms %}
+                                        <span class="cpu-value">{{ "%.2f"|format(rec.avg_cpu_ms) }}</span>
+                                    {% endif %}
+                                </td>
+                                <td class="warnings">{{ rec.warnings if rec.warnings else '' }}</td>
+                                <td>
+                                    <form method="get" action="{{ url_for('analyze', display_name=proc_name, rec_id=rec._rec_id) }}">
+                                        <button type="submit">Analyze</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <div class="no-data">
+                    <h3>No Blitz Cache results found</h3>
+                    <p>Click "Load Blitz Cache Results" to run sp_BlitzCache and analyze your plan cache.</p>
+                </div>
+            {% endif %}
+
+{% endblock %}
