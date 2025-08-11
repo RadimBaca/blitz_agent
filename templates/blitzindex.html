@@ -2,7 +2,7 @@
 
 {% block title %}Blitz Index Results - Blitz Dashboard{% endblock %}
 
-{% block page_header %}Blitz Index Results for {{ proc_name }}{% endblock %}
+{% block page_header %}Blitz Index Results for {{ proc_name }} - SQL Server Index Analysis Summary{% endblock %}
 
 {% block load_button_text %}Load Blitz Index Results{% endblock %}
 
@@ -10,7 +10,6 @@
 
             {% if records %}
                 <div class="blitzindex-summary">
-                    <h3>SQL Server Index Analysis Summary</h3>
                     <p>Found {{ records|length }} index-related findings. Items highlighted in blue have been analyzed.</p>
                 </div>
                 

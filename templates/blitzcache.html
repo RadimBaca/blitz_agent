@@ -2,7 +2,7 @@
 
 {% block title %}Blitz Cache Results - Blitz Dashboard{% endblock %}
 
-{% block page_header %}Blitz Cache Results for {{ proc_name }}{% endblock %}
+{% block page_header %}Blitz Cache Results for {{ proc_name }} - SQL Server Plan Cache Analysis Summary{% endblock %}
 
 {% block load_button_text %}Load Blitz Cache Results{% endblock %}
 
@@ -10,7 +10,6 @@
 
             {% if records %}
                 <div class="blitzcache-summary">
-                    <h3>SQL Server Plan Cache Analysis Summary</h3>
                     <p>Found {{ records|length }} cached query plans. Items highlighted in blue have been analyzed.</p>
                 </div>
                 
