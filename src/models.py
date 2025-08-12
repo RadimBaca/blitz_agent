@@ -43,6 +43,9 @@ class BlitzCacheRecord(BaseModel):
     query_text: Optional[str] = None
     avg_cpu_ms: Optional[float] = None
     total_cpu_ms: Optional[float] = None
+    executions: Optional[int] = None
+    total_reads: Optional[int] = None
+    last_execution: Optional[str] = None  # Using string for timestamp compatibility
     warnings: Optional[str] = None
     procedure_order: int
     pc_id: int
@@ -78,7 +81,7 @@ PROCEDURE_MODELS = {
 PROCEDURE_DISPLAY_KEYS = {
     "sp_Blitz": ["finding", "details", "priority"],
     "sp_BlitzIndex": ["finding", "details_schema_table_index_indexid", "priority"],
-    "sp_BlitzCache": ["query_text", "avg_cpu_ms", "total_cpu_ms", "warnings"],
+    "sp_BlitzCache": ["query_text", "avg_cpu_ms", "total_cpu_ms", "executions", "total_reads", "last_execution", "warnings"],
 }
 
 PROCEDURE_TABLE_NAMES = {
@@ -115,6 +118,9 @@ COLUMN_MAPPING = {
         "Query Text": "query_text",
         "Avg CPU (ms)": "avg_cpu_ms",
         "Total CPU (ms)": "total_cpu_ms",
+        "# Executions": "executions",
+        "Total Reads": "total_reads",
+        "Last Execution": "last_execution",
         "Warnings": "warnings",
     },
 }

@@ -45,6 +45,13 @@
                     <li><a href="/{{ key }}">{{ key }}</a></li>
                 {% endfor %}
             </ul>
+
+            <!-- Filters section - only show for Blitz, BlitzIndex, and BlitzCache -->
+            {% if proc_name in ["Blitz", "Blitz Index", "Blitz Cache"] %}
+                <hr class="sidebar-separator">
+                {% block sidebar_filters %}
+                {% endblock %}
+            {% endif %}
         </div>
         <div class="content">
             {% block content_header %}

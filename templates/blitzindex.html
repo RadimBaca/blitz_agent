@@ -6,13 +6,60 @@
 
 {% block load_button_text %}Load Blitz Index Results{% endblock %}
 
+{% block sidebar_filters %}
+<!-- Priority Filter -->
+<div class="sidebar-filter-section">
+    <form method="get" class="sidebar-priority-filter-form">
+        <label for="max_priority">Priority ≤:</label>
+        <select name="max_priority" id="max_priority" onchange="this.form.submit()">
+            <option value="">All</option>
+            <option value="1" {% if current_max_priority == "1" %}selected{% endif %}>1</option>
+            <option value="10" {% if current_max_priority == "10" %}selected{% endif %}>≤ 10</option>
+            <option value="50" {% if current_max_priority == "50" %}selected{% endif %}>≤ 50</option>
+            <option value="100" {% if current_max_priority == "100" %}selected{% endif %}>≤ 100</option>
+            <option value="200" {% if current_max_priority == "200" %}selected{% endif %}>≤ 200</option>
+        </select>
+        <!-- Hidden fields to preserve finding group selection -->
+        {% for group in selected_finding_groups %}
+            <input type="hidden" name="finding_groups" value="{{ group }}">
+        {% endfor %}
+    </form>
+</div>
+
+<!-- Finding Groups Filter -->
+{% if finding_groups %}
+<div class="sidebar-filter-section">
+    <form method="get" class="sidebar-finding-groups-form" id="findingGroupsForm">
+        <label>Finding Groups:</label>
+        <!-- Hidden field to preserve priority selection -->
+        {% if current_max_priority %}
+            <input type="hidden" name="max_priority" value="{{ current_max_priority }}">
+        {% endif %}
+
+        <div class="sidebar-finding-groups-controls">
+            <button type="button" onclick="selectAllGroups()" class="sidebar-control-btn">All</button>
+            <button type="button" onclick="deselectAllGroups()" class="sidebar-control-btn">None</button>
+        </div>
+
+        <div class="sidebar-finding-groups-checkboxes">
+            {% for group in finding_groups %}
+                <label class="sidebar-checkbox-label">
+                    <input type="checkbox" name="finding_groups" value="{{ group }}"
+                           {% if group in selected_finding_groups %}checked{% endif %}
+                           onchange="submitFindingGroupsForm()">
+                    <span class="sidebar-checkbox-text">{{ group }}</span>
+                </label>
+            {% endfor %}
+        </div>
+    </form>
+</div>
+{% endif %}
+{% endblock %}
+
 {% block content %}
 
             {% if records %}
-                <div class="blitzindex-summary">
-                    <p>Found {{ records|length }} index-related findings. Items highlighted in blue have been analyzed.</p>
-                </div>
-                
+
                 <table>
                     <thead>
                         <tr>
@@ -37,6 +84,11 @@
                         {% endfor %}
                     </tbody>
                 </table>
+            {% elif finding_groups %}
+                <div class="no-data">
+                    <h3>No results match your current filters</h3>
+                    <p>Try adjusting your priority or finding group filters in the sidebar to see results.</p>
+                </div>
             {% else %}
                 <div class="no-data">
                     <h3>No Blitz Index results found</h3>
@@ -44,4 +96,45 @@
                 </div>
             {% endif %}
 
+{% endblock %}
+
+{% block script %}
+<script>
+function selectAllGroups() {
+    const checkboxes = document.querySelectorAll('input[name="finding_groups"]');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = true;
+    });
+    // Remove deselect_all flag if it exists
+    const deselectField = document.querySelector('input[name="deselect_all"]');
+    if (deselectField) {
+        deselectField.remove();
+    }
+    submitFindingGroupsForm();
+}
+
+function deselectAllGroups() {
+    const checkboxes = document.querySelectorAll('input[name="finding_groups"]');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = false;
+    });
+
+    // Add hidden field to indicate explicit deselect all
+    const form = document.getElementById('findingGroupsForm');
+    const existingDeselectField = form.querySelector('input[name="deselect_all"]');
+    if (!existingDeselectField) {
+        const deselectField = document.createElement('input');
+        deselectField.type = 'hidden';
+        deselectField.name = 'deselect_all';
+        deselectField.value = 'true';
+        form.appendChild(deselectField);
+    }
+
+    submitFindingGroupsForm();
+}
+
+function submitFindingGroupsForm() {
+    document.getElementById('findingGroupsForm').submit();
+}
+</script>
 {% endblock %}
