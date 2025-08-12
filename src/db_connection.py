@@ -1,5 +1,5 @@
-import pyodbc
 import os
+import pyodbc
 from dotenv import load_dotenv
 import src.db_DAO as db_dao
 

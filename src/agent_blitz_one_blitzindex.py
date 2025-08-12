@@ -1,10 +1,11 @@
+from typing import List
 import os
+import shelve
 import io
 import csv
-import psycopg2
 import pyodbc
+import sys
 from dotenv import load_dotenv
-from typing import List
 
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.documents import Document
@@ -13,8 +14,6 @@ from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain_openai import ChatOpenAI
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
-import os
-import shelve
 
 # Import the centralized connection function
 from .db_connection import get_connection
@@ -29,7 +28,7 @@ embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
 
 if not os.path.exists(rag_directory):
     print("Vector store not found. Initializing vector store using webrawler.py first.")
-    exit(1)
+    sys.exit(1)
 
 else:
     print("Vector store exists. Loading existing vector store.")
@@ -72,15 +71,15 @@ def run_sqlserver_query_as_csv(query: str, params: tuple = (), max_rows: int = 5
             writer.writerow(columns)
             writer.writerows(rows)
 
-            result = output.getvalue()
+            sqlserver_result = output.getvalue()
 
              # limit maximum lebgth of CSV to prevent excessive output
-            MAX_CSV_LENGTH = 100000
-            if len(result) > MAX_CSV_LENGTH:
-                return result[:MAX_CSV_LENGTH] + "\n...[TRUNCATED]"
+            max_csv_len = 100000
+            if len(sqlserver_result) > max_csv_len:
+                return sqlserver_result[:max_csv_len] + "\n...[TRUNCATED]"
 
-            return result
-    except Exception as e:
+            return sqlserver_result
+    except pyodbc.Error as e:
         return f"Database connection error: {e}"
 
 
@@ -95,8 +94,8 @@ def query_knowledge_base(query: str) -> str:
     if not relevant_docs:
         return "No relevant information found in knowledge base."
 
-    result = "\n\n---\n\n".join(doc.page_content for doc in relevant_docs)
-    return result
+    vector_result = "\n\n---\n\n".join(doc.page_content for doc in relevant_docs)
+    return vector_result
 
 
 
@@ -116,7 +115,7 @@ llm = ChatOpenAI(model_name="gpt-4o-mini", temperature=0)
 agent = create_tool_calling_agent(llm=llm, tools=tools, prompt=prompt_template)
 agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True, max_iterations=2000)
 
-initial_user_question_template = """
+INITIAL_USER_QUESTION_TEMPLATE = """
 You are an expert in SQL Server performance tuning.
 
 Here is one row from the {} output that needs to be interpreted and analyzed:\n
@@ -143,17 +142,17 @@ Your output must:\n
 # TODO testing
 if __name__ == "__main__":
 
-    one_blitzindex_row = """
+    ONE_BLITZINDEX_ROW = """
     redundand index found: [schema].[table].[index] (indexid=1)
                          """
-    url = "https://www.brentozar.com/go/duplicateindex"
+    TEST_URL = "https://www.brentozar.com/go/duplicateindex"
 
     with shelve.open("url_store") as key_value:
-        user_question = initial_user_question_template.format(
+        user_question = INITIAL_USER_QUESTION_TEMPLATE.format(
             "sp_BlitzIndex",
-            one_blitzindex_row,
-            url,
-            key_value[url],
+            ONE_BLITZINDEX_ROW,
+            TEST_URL,
+            key_value[TEST_URL],
             os.getenv("MSSQL_DB")
         )
         print(user_question)

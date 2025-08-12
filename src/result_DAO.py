@@ -260,7 +260,7 @@ def get_chat_history(proc_name: str, rec_id: int) -> Optional[List[Tuple[str, st
             ORDER BY pc.run DESC, c.chat_order ASC
             """, (proc_name, rec_id)
         )
-        chat = [(role, msg) for role, msg in cur.fetchall()]
+        chat = list(cur.fetchall())
         if not chat:
             return None
         return chat

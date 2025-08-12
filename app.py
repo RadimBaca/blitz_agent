@@ -1,7 +1,7 @@
 
 import os
 import datetime
-from flask import Flask, render_template, request, redirect, url_for, jsonify
+from flask import Flask, render_template, request, redirect, url_for
 import pyodbc
 import markdown
 from markupsafe import Markup
@@ -155,7 +155,7 @@ def add_database():
         display_name = request.form.get("current_proc", "Blitz")
         return redirect(url_for('procedure', display_name=display_name))
 
-    except Exception as e:
+    except (pyodbc.Error, ValueError) as e:
         # Handle errors - in a real app, you'd want better error handling
         print(f"Error adding database: {e}")
         display_name = request.form.get("current_proc", "Blitz")
@@ -181,9 +181,9 @@ def delete_database():
         current_db_id = get_actual_db_id()
         if db_id_to_delete == current_db_id:
             # Find the first connection that's not the one being deleted
-            for conn in all_connections:
-                if conn.db_id != db_id_to_delete:
-                    set_actual_db_id(conn.db_id)
+            for connection in all_connections:
+                if connection.db_id != db_id_to_delete:
+                    set_actual_db_id(connection.db_id)
                     break
 
         # Delete the connection
@@ -193,7 +193,7 @@ def delete_database():
         display_name = request.form.get("current_proc", "Blitz")
         return redirect(url_for('procedure', display_name=display_name))
 
-    except Exception as e:
+    except (pyodbc.Error, ValueError) as e:
         print(f"Error deleting database: {e}")
         display_name = request.form.get("current_proc", "Blitz")
         return redirect(url_for('procedure', display_name=display_name))
@@ -241,7 +241,7 @@ def procedure(display_name):
         sort_order = request.args.get('sort_order', 'desc')  # Default to descending
 
         if sort_by in ['avg_cpu_ms', 'total_cpu_ms']:
-            reverse = (sort_order == 'desc')
+            reverse = sort_order == 'desc'
             # Sort records, handling None values by placing them at the end
             blitz_records = sorted(blitz_records,
                                  key=lambda x: getattr(x, sort_by) or 0,
@@ -269,8 +269,8 @@ def init(display_name):
         db_connection = db_dao.get_db(get_actual_db_id())
         database_name = db_connection.db_name if db_connection else None
 
-        with get_connection() as conn:
-            cursor = conn.cursor()
+        with get_connection() as db_connection:
+            cursor = db_connection.cursor()
 
             # Add @DatabaseName parameter for sp_BlitzCache and sp_BlitzIndex
             if procedure_name in ['sp_BlitzCache', 'sp_BlitzIndex'] and database_name:
@@ -323,7 +323,7 @@ def analyze(display_name, rec_id):
         if not chat_history:
             # Convert Pydantic model to dict for the agent
             record_dict = record.model_dump()
-            user_question = blitz_agent.initial_user_question_template.format(
+            user_question = blitz_agent.INITIAL_USER_QUESTION_TEMPLATE.format(
                 get_procedure_name(display_name), record_dict, os.getenv("MSSQL_DB", "sqlbench")
             )
             store_user_question = "\n".join(f"**{k}**: {v}" for k, v in record_dict.items())
