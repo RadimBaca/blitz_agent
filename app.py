@@ -234,6 +234,18 @@ def procedure(display_name):
 
     procedure_name = get_procedure_name(display_name)
     blitz_records = dao.get_all_records(procedure_name, get_actual_db_id())
+    current_connections = db_dao.get_all_db_connections()
+
+    # Handle priority filtering for Blitz and Blitz Index
+    if display_name in ["Blitz", "Blitz Index"]:
+        max_priority = request.args.get('max_priority')
+        if max_priority:
+            try:
+                max_priority_int = int(max_priority)
+                blitz_records = [record for record in blitz_records
+                               if record.priority is not None and record.priority <= max_priority_int]
+            except ValueError:
+                pass  # Invalid priority value, ignore filter
 
     # Handle sorting for BlitzCache
     if display_name == "Blitz Cache":
@@ -247,9 +259,7 @@ def procedure(display_name):
                                  key=lambda x: getattr(x, sort_by) or 0,
                                  reverse=reverse)
 
-    # Pass Pydantic models directly to template
-    # Get fresh list of connections for the combobox
-    current_connections = db_dao.get_all_db_connections()
+
 
     return render_template(template_name,
                            proc_name=display_name,
@@ -258,7 +268,8 @@ def procedure(display_name):
                            connections=current_connections,
                            actual_db_id=get_actual_db_id(),
                            current_sort_by=request.args.get('sort_by'),
-                           current_sort_order=request.args.get('sort_order', 'desc'))
+                           current_sort_order=request.args.get('sort_order', 'desc'),
+                           current_max_priority=request.args.get('max_priority'))
 
 @app.route("/init/<display_name>", methods=["POST"])
 def init(display_name):

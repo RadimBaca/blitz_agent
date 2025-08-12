@@ -299,6 +299,52 @@ button:hover {
     font-weight: bold;
 }
 
+/* Priority filter controls */
+.filter-controls {
+    margin: 15px 0;
+    padding: 12px;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.priority-filter-form {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0;
+}
+
+.priority-filter-form label {
+    font-weight: 600;
+    color: #333;
+    margin: 0;
+    white-space: nowrap;
+}
+
+.priority-filter-form select {
+    padding: 6px 12px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+    background-color: white;
+    color: #333;
+    cursor: pointer;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    min-width: 150px;
+}
+
+.priority-filter-form select:focus {
+    outline: none;
+    border-color: #007BFF;
+    box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
+}
+
+.priority-filter-form select:hover {
+    border-color: #999;
+}
+
 .active-connection {
     background-color: #e6f3ff !important;
 }

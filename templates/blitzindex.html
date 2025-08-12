@@ -13,6 +13,21 @@
                     <p>Found {{ records|length }} index-related findings. Items highlighted in blue have been analyzed.</p>
                 </div>
                 
+                <!-- Priority Filter -->
+                <div class="filter-controls">
+                    <form method="get" class="priority-filter-form">
+                        <label for="max_priority">Show only issues with priority ≤:</label>
+                        <select name="max_priority" id="max_priority" onchange="this.form.submit()">
+                            <option value="">All priorities</option>
+                            <option value="1" {% if current_max_priority == "1" %}selected{% endif %}>1 (Critical)</option>
+                            <option value="10" {% if current_max_priority == "10" %}selected{% endif %}>≤ 10 (High)</option>
+                            <option value="50" {% if current_max_priority == "50" %}selected{% endif %}>≤ 50 (Medium)</option>
+                            <option value="100" {% if current_max_priority == "100" %}selected{% endif %}>≤ 100 (Low)</option>
+                            <option value="200" {% if current_max_priority == "200" %}selected{% endif %}>≤ 200 (Info)</option>
+                        </select>
+                    </form>
+                </div>
+                
                 <table>
                     <thead>
                         <tr>
