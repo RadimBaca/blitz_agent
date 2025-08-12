@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Blitz Dashboard </title>
+    <title>{% block title %}Blitz Dashboard{% endblock %}</title>
     <link rel="stylesheet" href="/static/style.css">
     <script>
         function analyze(proc, id) {
@@ -47,57 +47,37 @@
             </ul>
         </div>
         <div class="content">
+            {% block content_header %}
             <div class="content-header">
-                <h2>Script Results for {{ proc_name }}</h2>
+                <h2>{% block page_header %}{% endblock %}</h2>
                 <a href="/administration" class="admin-link">⚙️ Administration</a>
             </div>
+            {% endblock %}
 
+            {% block load_form %}
             <form method="POST" action="/init/{{ proc_name }}">
-                <button type="submit">Load Blitz Table</button>
+                <button type="submit">{% block load_button_text %}Load Results{% endblock %}</button>
             </form>
+            {% endblock %}
 
-            {% if records %}
-                <table>
-                    <thead>
-                        <tr>
-                            {% for key in display_keys %}
-                                <th>{{ key }}</th>
-                            {% endfor %}
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for rec in records %}
-                            <tr {% if rec['_analyzed'] %}style="background-color: #e6f2ff;"{% endif %}>
-                                {% for key in display_keys %}
-                                    <td>{{ rec['_json_pretty'][key] if key in rec['_json_pretty'] else '' }}</td>
-                                {% endfor %}
-                                <td>
-                                    <form method="get" action="{{ url_for('analyze', display_name=proc_name, rec_id=loop.index0) }}">
-                                        <button type="submit">Analyze</button>
-                                    </form>
-                                </td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            {% endif %}
+            {% block content %}
+            {% endblock %}
 
             <div id="agent-output"></div>
-
         </div>
     </div>
+
+    {% block script %}
+    {% endblock %}
 
     <script>
         function handleDatabaseSelection(select) {
             if (select.value === 'add_new') {
-                // Reset selection to current database
-                select.value = '{{ actual_db_id }}';
-                // Navigate to administration page
+                // Redirect to administration page
                 window.location.href = '/administration';
             } else {
-                // Submit the form to change database
-                document.getElementById('dbSelectForm').submit();
+                // Submit the form normally
+                select.form.submit();
             }
         }
     </script>

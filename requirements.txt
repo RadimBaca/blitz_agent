@@ -10,3 +10,4 @@ langchain-openai
 pydantic
 chromadb
 pytest
+pylint

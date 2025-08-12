@@ -1,44 +1,14 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Database Administration - Blitz Dashboard</title>
-    <link rel="stylesheet" href="/static/style.css">
-</head>
-<body>
-    <div style="display:flex;">
-        <div class="sidebar">
-            <div class="db-selector">
-                <div class="db-selector-row">
-                    <form method="POST" action="/select_database" style="flex: 1;">
-                        <input type="hidden" name="current_proc" value="{{ proc_name }}">
-                        <select name="db_id" onchange="this.form.submit()">
-                            {% for conn in connections %}
-                                <option value="{{ conn.db_id }}" {% if conn.db_id == actual_db_id %}selected{% endif %}>
-                                    {{ conn.db_name }} ({{ conn.db_host }}:{{ conn.db_port }})
-                                </option>
-                            {% endfor %}
-                            <option value="add_new">➕ Add New Connection...</option>
-                        </select>
-                    </form>
-                    <form method="POST" action="/refresh_connections">
-                        <input type="hidden" name="current_proc" value="{{ proc_name }}">
-                        <button type="submit" class="refresh-btn" title="Refresh database connections">
-                            ↻
-                        </button>
-                    </form>
-                </div>
-            </div>
-            <form method="POST" action="/clear_all">
-                <button type="submit">Clear All</button>
-            </form>
-            <ul>
-                {% for key, name in procedures.items() %}
-                    <li><a href="/{{ key }}">{{ key }}</a></li>
-                {% endfor %}
-            </ul>
-        </div>
-        <div class="content">
-            <h2>Database Administration</h2>
+{% extends "base.html" %}
+
+{% block title %}Database Administration - Blitz Dashboard{% endblock %}
+
+{% block page_header %}Database Administration{% endblock %}
+
+{% block load_form %}
+<!-- No load form needed for administration page -->
+{% endblock %}
+
+{% block content %}
             
             <div class="admin-section">
                 <h3>Add New Database Connection</h3>
@@ -121,44 +91,40 @@
                     <p>No database connections found. Add one above to get started.</p>
                 {% endif %}
             </div>
-        </div>
-    </div>
+{% endblock %}
 
-    <script>
-        // Handle the "Add New Connection" option in the combobox
-        document.addEventListener('DOMContentLoaded', function() {
-            const select = document.querySelector('select[name="db_id"]');
-            if (select) {
-                select.addEventListener('change', function() {
-                    if (this.value === 'add_new') {
-                        // Reset to current selection
-                        this.value = '{{ actual_db_id }}';
-                        // Stay on the administration page
-                        window.location.href = '/administration';
-                    }
-                });
-            }
-        });
-
-        // Copy connection details to the form
-        function copyConnection(dbName, dbHost, dbPort, dbUser, dbPassword) {
-            // Fill the form fields with the copied data
-            document.getElementById('db_name').value = dbName + '_copy';
-            document.getElementById('db_host').value = dbHost;
-            document.getElementById('db_port').value = dbPort;
-            document.getElementById('db_user').value = dbUser;
-            document.getElementById('db_password').value = dbPassword;
-            
-            // Scroll to the form
-            document.querySelector('.admin-section').scrollIntoView({ 
-                behavior: 'smooth',
-                block: 'start'
-            });
-            
-            // Focus on the database name field for editing
-            document.getElementById('db_name').focus();
-            document.getElementById('db_name').select();
+{% block script %}
+<script>
+    // Override the default handleDatabaseSelection for administration page
+    function handleDatabaseSelection(select) {
+        if (select.value === 'add_new') {
+            // Reset to current selection and stay on administration page
+            select.value = '{{ actual_db_id }}';
+            return false; // Don't submit the form
+        } else {
+            // Submit the form normally for database changes
+            select.form.submit();
         }
-    </script>
-</body>
-</html>
+    }
+
+    // Copy connection details to the form
+    function copyConnection(dbName, dbHost, dbPort, dbUser, dbPassword) {
+        // Fill the form fields with the copied data
+        document.getElementById('db_name').value = dbName + '_copy';
+        document.getElementById('db_host').value = dbHost;
+        document.getElementById('db_port').value = dbPort;
+        document.getElementById('db_user').value = dbUser;
+        document.getElementById('db_password').value = dbPassword;
+        
+        // Scroll to the form
+        document.querySelector('.admin-section').scrollIntoView({ 
+            behavior: 'smooth',
+            block: 'start'
+        });
+        
+        // Focus on the database name field for editing
+        document.getElementById('db_name').focus();
+        document.getElementById('db_name').select();
+    }
+</script>
+{% endblock %}

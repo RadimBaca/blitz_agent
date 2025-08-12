@@ -195,3 +195,7 @@ cython_debug/
 
 # Memory Bank
 .roo/rules/memory-bank
+.roo/rules/
+.roo/tasks/
+
+db/

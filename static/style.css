@@ -440,6 +440,27 @@ table th {
     border-bottom: 2px solid #dee2e6;
 }
 
+table th.sortable a {
+    color: #333;
+    text-decoration: none;
+    display: block;
+    padding: 0;
+    cursor: pointer;
+    transition: color 0.3s ease;
+}
+
+table th.sortable a:hover {
+    color: #007BFF;
+}
+
+table th.sortable {
+    padding: 0;
+}
+
+table th.sortable a {
+    padding: 12px 15px;
+}
+
 table tbody tr:nth-child(even) {
     background-color: #f8f9fa;
 }
@@ -545,4 +566,97 @@ table tbody tr[style*="background-color: #e6f2ff"]:hover {
 
 #agent-output.active {
     display: block;
+}
+
+/* Blitz-specific styles */
+.blitz-summary {
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-radius: 5px;
+    margin: 20px 0;
+    border-left: 4px solid #007bff;
+}
+
+/* BlitzIndex-specific styles */
+.blitzindex-summary {
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-radius: 5px;
+    margin: 20px 0;
+    border-left: 4px solid #28a745;
+}
+
+.index-details {
+    font-family: 'Courier New', monospace;
+    font-size: 0.9em;
+    background-color: #f8f9fa;
+    padding: 4px;
+    border-radius: 3px;
+}
+
+/* BlitzCache-specific styles */
+.blitzcache-summary {
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-radius: 5px;
+    margin: 20px 0;
+    border-left: 4px solid #ffc107;
+}
+
+.query-text {
+    max-width: 300px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.8em;
+}
+
+.query-preview {
+    background-color: #f8f9fa;
+    padding: 4px;
+    border-radius: 3px;
+    border: 1px solid #e9ecef;
+    word-break: break-word;
+}
+
+.cpu-metric {
+    text-align: center;
+}
+
+.cpu-value {
+    font-weight: bold;
+    color: #dc3545;
+}
+
+.warnings {
+    color: #fd7e14;
+    font-weight: 500;
+}
+
+.priority-1 {
+    background-color: #dc3545;
+    color: white;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-weight: bold;
+}
+
+.priority-2 {
+    background-color: #fd7e14;
+    color: white;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-weight: bold;
+}
+
+.priority-3 {
+    background-color: #ffc107;
+    color: black;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-weight: bold;
+}
+
+.no-data {
+    text-align: center;
+    padding: 40px;
+    color: #6c757d;
 }

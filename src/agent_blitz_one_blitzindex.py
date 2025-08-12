@@ -1,10 +1,11 @@
+from typing import List
 import os
+import shelve
 import io
 import csv
-import psycopg2
 import pyodbc
+import sys
 from dotenv import load_dotenv
-from typing import List
 
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.documents import Document
@@ -13,8 +14,9 @@ from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain_openai import ChatOpenAI
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
-import os
-import shelve
+
+# Import the centralized connection function
+from .db_connection import get_connection
 
 
 # Init
@@ -26,7 +28,7 @@ embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
 
 if not os.path.exists(rag_directory):
     print("Vector store not found. Initializing vector store using webrawler.py first.")
-    exit(1)
+    sys.exit(1)
 
 else:
     print("Vector store exists. Loading existing vector store.")
@@ -44,97 +46,42 @@ def run_sqlserver_query_as_csv(query: str, params: tuple = (), max_rows: int = 5
     This method allows you query_store or other views to get information about metadata and statistics.
     Avoid calling the same query multiple times
     """
-    conn = None
     try:
-        server = os.getenv("MSSQL_HOST")       # e.g. bayer.cs.vsb.cz\SQLDB
-        database = os.getenv("MSSQL_DB")       # e.g. sqlbench
-        username = os.getenv("MSSQL_USER")     # e.g. sqlbench
-        password = os.getenv("MSSQL_PASSWORD") # your password
+        # Use the centralized connection function
+        with get_connection() as conn:
+            cursor = conn.cursor()
 
-        conn_str = (
-            f"DRIVER={{ODBC Driver 18 for SQL Server}};"
-            f"SERVER={server};"
-            f"DATABASE={database};"
-            f"UID={username};"
-            f"PWD={password};"
-            f"TrustServerCertificate=yes;"
-            f"Encrypt=yes;"
-        )
-        conn = pyodbc.connect(conn_str)
-        cursor = conn.cursor()
+            try:
+                cursor.execute(query, params)
+            except pyodbc.ProgrammingError as e:
+                return f"Query execution error: {e}"
 
-        try:
-            cursor.execute(query, params)
-        except pyodbc.ProgrammingError as e:
-            return f"Query execution error: {e}"
+            while cursor.description is None:
+                if not cursor.nextset():
+                    return "The query executed but returned no tabular results."
 
-        while cursor.description is None:
-            if not cursor.nextset():
-                return "The query executed but returned no tabular results."
+            columns = [column[0] for column in cursor.description]
+            rows = cursor.fetchmany(max_rows)
 
-        columns = [column[0] for column in cursor.description]
-        rows = cursor.fetchmany(max_rows)
+            if not rows:
+                return ""
 
-        if not rows:
-            return ""
+            output = io.StringIO()
+            writer = csv.writer(output, delimiter=';', quoting=csv.QUOTE_MINIMAL)
+            writer.writerow(columns)
+            writer.writerows(rows)
 
-        output = io.StringIO()
-        writer = csv.writer(output, delimiter=';', quoting=csv.QUOTE_MINIMAL)
-        writer.writerow(columns)
-        writer.writerows(rows)
+            sqlserver_result = output.getvalue()
 
-        result = output.getvalue()
+             # limit maximum lebgth of CSV to prevent excessive output
+            max_csv_len = 100000
+            if len(sqlserver_result) > max_csv_len:
+                return sqlserver_result[:max_csv_len] + "\n...[TRUNCATED]"
 
-         # limit maximum lebgth of CSV to prevent excessive output
-        MAX_CSV_LENGTH = 100000
-        if len(result) > MAX_CSV_LENGTH:
-            return result[:MAX_CSV_LENGTH] + "\n...[TRUNCATED]"
+            return sqlserver_result
+    except pyodbc.Error as e:
+        return f"Database connection error: {e}"
 
-        return result
-    finally:
-        if conn:
-            conn.close()
-
-# class SubmitResultInput(BaseModel):
-#     short_name: str = Field(..., description="Short name of the recommendation.", max_length=100)
-#     recommendation: str = Field(..., description="The text of the recommendation.")
-#     recommendation_category: str = Field(..., description="The category/type of the recommendation.")
-
-@tool
-def submit_result(short_name: str, recommendation: str, recommendation_category: str ):
-    """
-    Submit a recommendation to the agent_result database as a triplet (short_name, recommendation, recommendation_type).
-    `short_name` parameter should be a short name of the recommendation.
-    `recommendation` parameter should be a string in MarkDown format.
-    `recommendation_category` parameter should be a string describing the type of recommendation.
-    """
-
-    if not short_name.strip() or not recommendation.strip() or not recommendation_category.strip():
-        return "submit_result error: Both recommendation and recommendation_type must be non-empty strings."
-
-    conn = None
-    try:
-        conn = psycopg2.connect(
-            dbname=os.getenv("AGENT_RESULTS_DB"),
-            user=os.getenv("AGENT_RESULTS_USER"),
-            password=os.getenv("AGENT_RESULTS_PASSWORD"),
-            host=os.getenv("AGENT_RESULTS_HOST"),
-            port=os.getenv("AGENT_RESULTS_PORT", 5432),
-        )
-        run_name = os.getenv("RUN_NAME", "default_run")
-        with conn.cursor() as cur:
-            cur.execute(
-                "INSERT INTO recommendation (run_name, short_name, recommendation, recommendation_type) VALUES (%s, %s, %s, %s)",
-                (run_name, short_name, recommendation, recommendation_category)
-            )
-            conn.commit()
-            return "Recommendation submitted successfully."
-
-    except Exception as e:
-        return f"submit_result, error running query: {e}"
-    finally:
-        if conn:
-            conn.close()
 
 @tool
 def query_knowledge_base(query: str) -> str:
@@ -147,8 +94,8 @@ def query_knowledge_base(query: str) -> str:
     if not relevant_docs:
         return "No relevant information found in knowledge base."
 
-    result = "\n\n---\n\n".join(doc.page_content for doc in relevant_docs)
-    return result
+    vector_result = "\n\n---\n\n".join(doc.page_content for doc in relevant_docs)
+    return vector_result
 
 
 
@@ -168,7 +115,7 @@ llm = ChatOpenAI(model_name="gpt-4o-mini", temperature=0)
 agent = create_tool_calling_agent(llm=llm, tools=tools, prompt=prompt_template)
 agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True, max_iterations=2000)
 
-initial_user_question_template = """
+INITIAL_USER_QUESTION_TEMPLATE = """
 You are an expert in SQL Server performance tuning.
 
 Here is one row from the {} output that needs to be interpreted and analyzed:\n
@@ -195,17 +142,17 @@ Your output must:\n
 # TODO testing
 if __name__ == "__main__":
 
-    one_blitzindex_row = """
+    ONE_BLITZINDEX_ROW = """
     redundand index found: [schema].[table].[index] (indexid=1)
                          """
-    url = "https://www.brentozar.com/go/duplicateindex"
+    TEST_URL = "https://www.brentozar.com/go/duplicateindex"
 
     with shelve.open("url_store") as key_value:
-        user_question = initial_user_question_template.format(
+        user_question = INITIAL_USER_QUESTION_TEMPLATE.format(
             "sp_BlitzIndex",
-            one_blitzindex_row,
-            url,
-            key_value[url],
+            ONE_BLITZINDEX_ROW,
+            TEST_URL,
+            key_value[TEST_URL],
             os.getenv("MSSQL_DB")
         )
         print(user_question)

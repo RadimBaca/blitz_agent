@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}Blitz Results - Blitz Dashboard{% endblock %}
+
+{% block page_header %}Blitz Results for {{ proc_name }} - SQL Server Health Check Summary{% endblock %}
+
+{% block load_button_text %}Load Blitz Results{% endblock %}
+
+{% block content %}
+
+            {% if records %}
+                <div class="blitz-summary">
+                    <p>Found {{ records|length }} potential issues. Items highlighted in blue have been analyzed.</p>
+                </div>
+                
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Finding</th>
+                            <th>Details</th>
+                            <th>Priority</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for rec in records %}
+                            <tr {% if rec._analyzed %}style="background-color: #e6f2ff;"{% endif %}>
+                                <td>{{ rec.finding if rec.finding else '' }}</td>
+                                <td>{{ rec.details if rec.details else '' }}</td>
+                                <td>{{ rec.priority if rec.priority else '' }}</td>
+                                <td>
+                                    <form method="get" action="{{ url_for('analyze', display_name=proc_name, rec_id=rec._rec_id) }}">
+                                        <button type="submit">Analyze</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <div class="no-data">
+                    <h3>No Blitz results found</h3>
+                    <p>Click "Load Blitz Results" to run sp_Blitz and analyze your SQL Server instance.</p>
+                </div>
+            {% endif %}
+
+{% endblock %}
