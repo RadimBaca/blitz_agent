@@ -4,10 +4,26 @@ services:
   app:
     build: .
     container_name: blitz_dashboard
-    ports:
-      - "5001:5000"
+    # původně: ports: ["5001:5000"]
+    expose:
+      - "5001"
     env_file:
       - .env
+    environment:
+      - APP_PORT=5001
     volumes:
       - .:/app
-    restart: unless-stopped 
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    container_name: blitz_dashboard_proxy
+    ports:
+      - "8080:80"   # use http://localhost:8080
+      # - "443:443" # when dealing with HTTPS in the future
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./.htpasswd:/etc/nginx/.htpasswd:ro
+    depends_on:
+      - app
+    restart: unless-stopped

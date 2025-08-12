@@ -1,6 +1,6 @@
 # AI Agent Based on Brent Ozar's First Responder Scripts
 
-This is a AI agent that connects to your SQL Server instance and helps with database administration tasks. 
+This is a AI agent that connects to your SQL Server instance and helps with database administration tasks.
 It is a web application that runs in a Docker container and uses OpenAI LLM API.
 
 # Preparation
@@ -9,7 +9,7 @@ It is a web application that runs in a Docker container and uses OpenAI LLM API.
 
 This application connects to a SQL Server instance and runs [Brent Ozar's First Responder scripts](https://github.com/BrentOzarULTD/SQL-Server-First-Responder-Kit).
 Therefore, you need to have the scripts installed on your SQL Server instance.
-In order to install the First Responder Kit, you simply clone the repository and run the `Install-All-Scripts.sql` script against your SQL Server. 
+In order to install the First Responder Kit, you simply clone the repository and run the `Install-All-Scripts.sql` script against your SQL Server.
 
 ```shell
 git clone https://github.com/BrentOzarULTD/SQL-Server-First-Responder-Kit
@@ -51,6 +51,16 @@ You need to create/prepare the following directories and files that are not part
 
 You need to create an OpenAI API key and add it to the `.env` file as `OPENAI_API_KEY`.
 
+## Basic Authentication
+
+To secure the application with basic authentication, create an `.htpasswd` file:
+
+```sh
+docker run --rm -it httpd:2.4-alpine htpasswd -nbB admin 'TvojeSilneHeslo' > .htpasswd
+```
+
+This creates a password file with username `admin` and password `TvojeSilneHeslo`. You can change these credentials as needed.
+
 # Usage
 
 Docker needs to be installed on your system. Once everything is prepared you can simply build the image and run the container:
@@ -58,3 +68,5 @@ Docker needs to be installed on your system. Once everything is prepared you can
 ```sh
 docker-compose up --build
 ```
+
+The application will be available at `http://localhost:8080` with basic authentication. Use the credentials you created in the `.htpasswd` file (by default: username `admin`, password `TvojeSilneHeslo`).
