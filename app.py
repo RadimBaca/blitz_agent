@@ -356,6 +356,56 @@ def procedure(display_name):
             except ValueError:
                 pass  # Invalid value, ignore filter
 
+        # Handle time window filtering
+        start_hour = request.args.get('start_hour')
+        end_hour = request.args.get('end_hour')
+
+        if start_hour and end_hour:
+            try:
+                start_hour_int = int(start_hour)
+                end_hour_int = int(end_hour)
+
+                # Filter records based on hour of last_execution
+                filtered_records = []
+                for record in blitz_records:
+                    if record.last_execution:
+                        # Extract hour from last_execution datetime
+                        try:
+                            if hasattr(record.last_execution, 'hour'):
+                                # It's a datetime object
+                                execution_hour = record.last_execution.hour
+                            else:
+                                # It's a string, try to parse it
+                                from datetime import datetime as dt_parser
+                                # Try common datetime formats, including ISO format
+                                execution_hour = None
+                                for fmt in ['%Y-%m-%dT%H:%M:%S.%f', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M:%S.%f', '%m/%d/%Y %H:%M:%S']:
+                                    try:
+                                        dt = dt_parser.strptime(str(record.last_execution), fmt)
+                                        execution_hour = dt.hour
+                                        break
+                                    except ValueError:
+                                        continue
+
+                                if execution_hour is None:
+                                    continue
+
+                            # Check if execution hour is within the selected range
+                            if start_hour_int <= end_hour_int:
+                                # Normal range (e.g., 9-17)
+                                if start_hour_int <= execution_hour <= end_hour_int:
+                                    filtered_records.append(record)
+                            else:
+                                # Range crosses midnight (e.g., 22-6)
+                                if execution_hour >= start_hour_int or execution_hour <= end_hour_int:
+                                    filtered_records.append(record)
+                        except (AttributeError, ValueError):
+                            continue
+
+                blitz_records = filtered_records
+            except ValueError:
+                pass  # Invalid hour values, ignore filter
+
         sort_by = request.args.get('sort_by')
         sort_order = request.args.get('sort_order', 'desc')  # Default to descending
 
@@ -383,7 +433,9 @@ def procedure(display_name):
                            current_min_avg_cpu=request.args.get('min_avg_cpu'),
                            current_min_total_cpu=request.args.get('min_total_cpu'),
                            current_min_executions=request.args.get('min_executions'),
-                           current_min_total_reads=request.args.get('min_total_reads'))
+                           current_min_total_reads=request.args.get('min_total_reads'),
+                           current_start_hour=request.args.get('start_hour'),
+                           current_end_hour=request.args.get('end_hour'))
 
 @app.route("/init/<display_name>", methods=["POST"])
 def init(display_name):

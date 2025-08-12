@@ -738,3 +738,69 @@ table tbody tr[style*="background-color: #e6f2ff"]:hover {
     display: flex;
     justify-content: center;
 }
+
+/* Hour selection grid for BlitzCache time filtering */
+.time-filter-info {
+    margin-bottom: 8px;
+}
+
+.time-filter-info small {
+    color: #6c757d;
+    font-style: italic;
+    font-size: 11px;
+}
+
+.hour-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 3px;
+    margin-bottom: 8px;
+}
+
+.hour-btn {
+    padding: 4px 2px !important;
+    margin: 0 !important;
+    border: 1px solid #ced4da !important;
+    background-color: #fff !important;
+    color: #495057 !important;
+    border-radius: 3px !important;
+    cursor: pointer;
+    font-size: 10px !important;
+    text-align: center;
+    transition: all 0.2s ease;
+    min-height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.hour-btn:hover {
+    background-color: #e9ecef !important;
+    border-color: #80bdff !important;
+    transform: none !important;
+    color: #495057 !important;
+}
+
+.hour-btn.selected {
+    background-color: #007bff !important;
+    color: white !important;
+    border-color: #007bff !important;
+}
+
+.hour-btn.in-range {
+    background-color: #cce7ff !important;
+    border-color: #007bff !important;
+    color: #004085 !important;
+}
+
+.hour-btn.start-hour {
+    background-color: #007bff !important;
+    color: white !important;
+    font-weight: bold !important;
+}
+
+.hour-btn.end-hour {
+    background-color: #007bff !important;
+    color: white !important;
+    font-weight: bold !important;
+}

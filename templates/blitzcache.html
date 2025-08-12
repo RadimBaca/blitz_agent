@@ -48,6 +48,23 @@
                    onchange="submitBlitzCacheForm()">
         </div>
 
+        <div class="sidebar-metric-filter">
+            <label>Last Execution Time Filter:</label>
+            <div class="time-filter-info">
+                <small id="timeFilterStatus">Click hours to set range</small>
+            </div>
+            <div class="hour-grid">
+                {% for hour in range(24) %}
+                    <button type="button" class="hour-btn" data-hour="{{ hour }}"
+                            onclick="selectHour({{ hour }})">
+                        {{ "%02d"|format(hour) }}
+                    </button>
+                {% endfor %}
+            </div>
+            <input type="hidden" name="start_hour" id="start_hour" value="{{ current_start_hour if current_start_hour else '' }}">
+            <input type="hidden" name="end_hour" id="end_hour" value="{{ current_end_hour if current_end_hour else '' }}">
+        </div>
+
         <div class="sidebar-filter-controls">
             <button type="button" onclick="clearAllFilters()" class="sidebar-control-btn">Clear All</button>
         </div>
@@ -202,7 +219,127 @@ function clearAllFilters() {
         input.style.borderColor = '#ced4da';
         input.title = '';
     });
+
+    // Clear hour selection
+    clearHourSelection();
+
     document.getElementById('blitzCacheFilterForm').submit();
 }
+
+let selectedStartHour = null;
+let selectedEndHour = null;
+
+function initializeHourSelection() {
+    // Initialize from hidden fields if they exist
+    const startHour = document.getElementById('start_hour').value;
+    const endHour = document.getElementById('end_hour').value;
+
+    if (startHour !== '' && endHour !== '') {
+        selectedStartHour = parseInt(startHour);
+        selectedEndHour = parseInt(endHour);
+        updateHourDisplay();
+    }
+}
+
+function selectHour(hour) {
+    if (selectedStartHour === null) {
+        // First click - select start hour
+        selectedStartHour = hour;
+        selectedEndHour = null;
+        updateHourDisplay();
+        updateTimeFilterStatus(`Start: ${formatHour(hour)}. Click end hour.`);
+    } else if (selectedEndHour === null) {
+        // Second click - select end hour
+        if (hour === selectedStartHour) {
+            // Same hour clicked - single hour selection
+            selectedEndHour = hour;
+        } else {
+            selectedEndHour = hour;
+        }
+        updateHourDisplay();
+        updateFilterAndSubmit();
+    } else {
+        // Third click - clear selection
+        clearHourSelection();
+        updateFilterAndSubmit();
+    }
+}
+
+function clearHourSelection() {
+    selectedStartHour = null;
+    selectedEndHour = null;
+    document.getElementById('start_hour').value = '';
+    document.getElementById('end_hour').value = '';
+    updateHourDisplay();
+    updateTimeFilterStatus('Click hours to set range');
+}
+
+function updateHourDisplay() {
+    // Reset all buttons
+    document.querySelectorAll('.hour-btn').forEach(btn => {
+        btn.classList.remove('selected', 'in-range', 'start-hour', 'end-hour');
+    });
+
+    if (selectedStartHour !== null) {
+        const startBtn = document.querySelector(`[data-hour="${selectedStartHour}"]`);
+        startBtn.classList.add('selected', 'start-hour');
+
+        if (selectedEndHour !== null) {
+            const endBtn = document.querySelector(`[data-hour="${selectedEndHour}"]`);
+            endBtn.classList.add('selected', 'end-hour');
+
+            // Highlight range between start and end
+            if (selectedStartHour <= selectedEndHour) {
+                // Normal range (e.g., 9-17)
+                for (let h = selectedStartHour; h <= selectedEndHour; h++) {
+                    const btn = document.querySelector(`[data-hour="${h}"]`);
+                    btn.classList.add('in-range');
+                }
+                const rangeText = selectedStartHour === selectedEndHour ?
+                    `Hour ${formatHour(selectedStartHour)}` :
+                    `${formatHour(selectedStartHour)} - ${formatHour(selectedEndHour)}`;
+                updateTimeFilterStatus(`Active: ${rangeText}. Click any hour to clear.`);
+            } else {
+                // Range crosses midnight (e.g., 21-5 means 21:00-23:59 and 00:00-05:59)
+                // Highlight from start hour to 23
+                for (let h = selectedStartHour; h <= 23; h++) {
+                    const btn = document.querySelector(`[data-hour="${h}"]`);
+                    btn.classList.add('in-range');
+                }
+                // Highlight from 0 to end hour
+                for (let h = 0; h <= selectedEndHour; h++) {
+                    const btn = document.querySelector(`[data-hour="${h}"]`);
+                    btn.classList.add('in-range');
+                }
+                const rangeText = `${formatHour(selectedStartHour)} - ${formatHour(selectedEndHour)} (crosses midnight)`;
+                updateTimeFilterStatus(`Active: ${rangeText}. Click any hour to clear.`);
+            }
+        }
+    }
+}
+
+function updateFilterAndSubmit() {
+    if (selectedStartHour !== null && selectedEndHour !== null) {
+        document.getElementById('start_hour').value = selectedStartHour;
+        document.getElementById('end_hour').value = selectedEndHour;
+    } else {
+        document.getElementById('start_hour').value = '';
+        document.getElementById('end_hour').value = '';
+    }
+    document.getElementById('blitzCacheFilterForm').submit();
+}
+
+function updateTimeFilterStatus(text) {
+    document.getElementById('timeFilterStatus').textContent = text;
+}
+
+function formatHour(hour) {
+    return hour.toString().padStart(2, '0') + ':00';
+}
+
+// Initialize hour selection on page load
+document.addEventListener('DOMContentLoaded', function() {
+    initializeHourSelection();
+});
 </script>
 {% endblock %}
