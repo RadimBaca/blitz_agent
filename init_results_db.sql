@@ -20,22 +20,6 @@ CREATE TABLE Procedure_call (
   db_id INTEGER NOT NULL REFERENCES Database_connection (db_id)
 );
 
-CREATE TABLE Procedure_result (
-  pr_id INTEGER PRIMARY KEY,
-  result TEXT NOT NULL,
-  procedure_order INTEGER NOT NULL,
-  pc_id INTEGER NOT NULL REFERENCES Procedure_call (pc_id)
-);
-
-CREATE TABLE Chat (
-  ch_id INTEGER PRIMARY KEY,
-  response TEXT NOT NULL,
-  type VARCHAR,
-  chat_order INTEGER,
-  pr_id INTEGER NOT NULL REFERENCES Procedure_result (pr_id)
-);
-
--- New separate tables for each Blitz procedure
 CREATE TABLE Procedure_blitz (
   pb_id INTEGER PRIMARY KEY,
   procedure_order INTEGER NOT NULL,
@@ -61,6 +45,9 @@ CREATE TABLE Procedure_blitzcache (
   query_text TEXT,
   avg_cpu_ms REAL,
   total_cpu_ms REAL,
+  executions INTEGER,
+  total_reads INTEGER,
+  last_execution TIMESTAMP,
   warnings TEXT
 );
 

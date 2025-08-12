@@ -233,12 +233,14 @@ def procedure(display_name):
                            actual_db_id=get_actual_db_id())
 
     procedure_name = get_procedure_name(display_name)
-    all_blitz_records = dao.get_all_records(procedure_name, get_actual_db_id())
-    blitz_records = all_blitz_records.copy()  # Make a copy for filtering
+    blitz_records = dao.get_all_records(procedure_name, get_actual_db_id())
     current_connections = db_dao.get_all_db_connections()
 
     # Handle priority filtering for Blitz and Blitz Index
     if display_name in ["Blitz", "Blitz Index"]:
+        blitz_records = [record for record in blitz_records
+                    if record.priority is not None and record.priority >= 0]
+
         max_priority = request.args.get('max_priority')
         if max_priority:
             try:
@@ -253,9 +255,9 @@ def procedure(display_name):
     selected_finding_groups = []
 
     if display_name == "Blitz":
-        # Extract all unique findings from ALL records (not filtered ones) for filter display
+        # Extract all unique findings from records with valid priority (>= 0) for filter display
         all_groups = set()
-        for record in all_blitz_records:
+        for record in blitz_records:
             if record.finding:
                 all_groups.add(record.finding)
 
@@ -280,16 +282,13 @@ def procedure(display_name):
                            if record.finding and record.finding in selected_finding_groups]
 
     elif display_name == "Blitz Index":
-        # Extract all unique finding groups from ALL records (not filtered ones) for filter display
+        # Extract all unique finding groups from records with valid priority (>= 0) for filter display
         all_groups = set()
-        for record in all_blitz_records:
-            if record.finding and record.priority != -1:
+        for record in blitz_records:
+            if record.finding:
                 if ':' in record.finding:
                     group = record.finding.split(':', 1)[0]
                     all_groups.add(group)
-            elif record.priority == -1:
-                # Priority -1 findings don't follow the group:subcategory format
-                all_groups.add('Priority -1')
 
         finding_groups = sorted(list(all_groups))
 
@@ -310,21 +309,57 @@ def procedure(display_name):
             # Filter records by selected finding groups
             filtered_records = []
             for record in blitz_records:
-                if record.finding:
-                    if record.priority == -1 and 'Priority -1' in selected_finding_groups:
+                if record.finding and ':' in record.finding:
+                    group = record.finding.split(':', 1)[0]
+                    if group in selected_finding_groups:
                         filtered_records.append(record)
-                    elif record.priority != -1 and ':' in record.finding:
-                        group = record.finding.split(':', 1)[0]
-                        if group in selected_finding_groups:
-                            filtered_records.append(record)
             blitz_records = filtered_records
 
-    # Handle sorting for BlitzCache
+    # Handle BlitzCache filtering
     if display_name == "Blitz Cache":
+        # Get filter parameters
+        min_avg_cpu = request.args.get('min_avg_cpu')
+        min_total_cpu = request.args.get('min_total_cpu')
+        min_executions = request.args.get('min_executions')
+        min_total_reads = request.args.get('min_total_reads')
+
+        # Apply filters if they are provided and valid
+        if min_avg_cpu:
+            try:
+                min_avg_cpu_float = float(min_avg_cpu)
+                blitz_records = [record for record in blitz_records
+                               if record.avg_cpu_ms is not None and record.avg_cpu_ms >= min_avg_cpu_float]
+            except ValueError:
+                pass  # Invalid value, ignore filter
+
+        if min_total_cpu:
+            try:
+                min_total_cpu_float = float(min_total_cpu)
+                blitz_records = [record for record in blitz_records
+                               if record.total_cpu_ms is not None and record.total_cpu_ms >= min_total_cpu_float]
+            except ValueError:
+                pass  # Invalid value, ignore filter
+
+        if min_executions:
+            try:
+                min_executions_int = int(min_executions)
+                blitz_records = [record for record in blitz_records
+                               if record.executions is not None and record.executions >= min_executions_int]
+            except ValueError:
+                pass  # Invalid value, ignore filter
+
+        if min_total_reads:
+            try:
+                min_total_reads_int = int(min_total_reads)
+                blitz_records = [record for record in blitz_records
+                               if record.total_reads is not None and record.total_reads >= min_total_reads_int]
+            except ValueError:
+                pass  # Invalid value, ignore filter
+
         sort_by = request.args.get('sort_by')
         sort_order = request.args.get('sort_order', 'desc')  # Default to descending
 
-        if sort_by in ['avg_cpu_ms', 'total_cpu_ms']:
+        if sort_by in ['avg_cpu_ms', 'total_cpu_ms', 'executions', 'total_reads']:
             reverse = sort_order == 'desc'
             # Sort records, handling None values by placing them at the end
             blitz_records = sorted(blitz_records,
@@ -343,7 +378,12 @@ def procedure(display_name):
                            current_sort_order=request.args.get('sort_order', 'desc'),
                            current_max_priority=request.args.get('max_priority'),
                            finding_groups=finding_groups,
-                           selected_finding_groups=selected_finding_groups)
+                           selected_finding_groups=selected_finding_groups,
+                           # BlitzCache filter values
+                           current_min_avg_cpu=request.args.get('min_avg_cpu'),
+                           current_min_total_cpu=request.args.get('min_total_cpu'),
+                           current_min_executions=request.args.get('min_executions'),
+                           current_min_total_reads=request.args.get('min_total_reads'))
 
 @app.route("/init/<display_name>", methods=["POST"])
 def init(display_name):

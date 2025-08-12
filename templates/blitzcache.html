@@ -6,12 +6,58 @@
 
 {% block load_button_text %}Load Blitz Cache Results{% endblock %}
 
+{% block sidebar_filters %}
+<!-- BlitzCache Filters -->
+<div class="sidebar-filter-section">
+    <form method="get" class="sidebar-blitzcache-filter-form" id="blitzCacheFilterForm">
+        <label>Filter Criteria:</label>
+
+        <div class="sidebar-metric-filter">
+            <label for="min_avg_cpu">Min Avg CPU (ms):</label>
+            <input type="text" name="min_avg_cpu" id="min_avg_cpu"
+                   value="{{ current_min_avg_cpu if current_min_avg_cpu else '' }}"
+                   placeholder="e.g. 100.5"
+                   oninput="validateNumber(this)"
+                   onchange="submitBlitzCacheForm()">
+        </div>
+
+        <div class="sidebar-metric-filter">
+            <label for="min_total_cpu">Min Total CPU (ms):</label>
+            <input type="text" name="min_total_cpu" id="min_total_cpu"
+                   value="{{ current_min_total_cpu if current_min_total_cpu else '' }}"
+                   placeholder="e.g. 5000"
+                   oninput="validateNumber(this)"
+                   onchange="submitBlitzCacheForm()">
+        </div>
+
+        <div class="sidebar-metric-filter">
+            <label for="min_executions">Min Executions:</label>
+            <input type="text" name="min_executions" id="min_executions"
+                   value="{{ current_min_executions if current_min_executions else '' }}"
+                   placeholder="e.g. 10"
+                   oninput="validateNumber(this)"
+                   onchange="submitBlitzCacheForm()">
+        </div>
+
+        <div class="sidebar-metric-filter">
+            <label for="min_total_reads">Min Total Reads:</label>
+            <input type="text" name="min_total_reads" id="min_total_reads"
+                   value="{{ current_min_total_reads if current_min_total_reads else '' }}"
+                   placeholder="e.g. 1000"
+                   oninput="validateNumber(this)"
+                   onchange="submitBlitzCacheForm()">
+        </div>
+
+        <div class="sidebar-filter-controls">
+            <button type="button" onclick="clearAllFilters()" class="sidebar-control-btn">Clear All</button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
 {% block content %}
 
             {% if records %}
-                <!-- <div class="blitzcache-summary">
-                    <p>Found {{ records|length }} cached query plans. Items highlighted in blue have been analyzed.</p>
-                </div> -->
 
                 <table>
                     <thead>
@@ -33,6 +79,23 @@
                                     {% endif %}
                                 </a>
                             </th>
+                            <th class="sortable">
+                                <a href="{{ url_for('procedure', display_name=proc_name, sort_by='executions', sort_order='desc' if current_sort_by != 'executions' or current_sort_order == 'asc' else 'asc') }}">
+                                    # Executions
+                                    {% if current_sort_by == 'executions' %}
+                                        {% if current_sort_order == 'desc' %}↓{% else %}↑{% endif %}
+                                    {% endif %}
+                                </a>
+                            </th>
+                            <th class="sortable">
+                                <a href="{{ url_for('procedure', display_name=proc_name, sort_by='total_reads', sort_order='desc' if current_sort_by != 'total_reads' or current_sort_order == 'asc' else 'asc') }}">
+                                    Total Reads
+                                    {% if current_sort_by == 'total_reads' %}
+                                        {% if current_sort_order == 'desc' %}↓{% else %}↑{% endif %}
+                                    {% endif %}
+                                </a>
+                            </th>
+                            <th>Last Execution</th>
                             <th>Warnings</th>
                             <th>Action</th>
                         </tr>
@@ -56,6 +119,21 @@
                                         <span class="cpu-value">{{ "%.2f"|format(rec.total_cpu_ms) }}</span>
                                     {% endif %}
                                 </td>
+                                <td class="execution-metric">
+                                    {% if rec.executions %}
+                                        <span class="execution-value">{{ rec.executions }}</span>
+                                    {% endif %}
+                                </td>
+                                <td class="reads-metric">
+                                    {% if rec.total_reads %}
+                                        <span class="reads-value">{{ rec.total_reads }}</span>
+                                    {% endif %}
+                                </td>
+                                <td class="timestamp">
+                                    {% if rec.last_execution %}
+                                        {{ rec.last_execution }}
+                                    {% endif %}
+                                </td>
                                 <td class="warnings">{{ rec.warnings if rec.warnings else '' }}</td>
                                 <td>
                                     <form method="get" action="{{ url_for('analyze', display_name=proc_name, rec_id=rec._rec_id) }}">
@@ -73,4 +151,58 @@
                 </div>
             {% endif %}
 
+{% endblock %}
+
+{% block script %}
+<script>
+function validateNumber(input) {
+    const value = input.value.trim();
+
+    // Allow empty values
+    if (value === '') {
+        input.style.borderColor = '#ced4da';
+        input.title = '';
+        return true;
+    }
+
+    // Check if it's a valid number
+    const number = parseFloat(value);
+    if (isNaN(number) || number < 0) {
+        input.style.borderColor = '#dc3545';
+        input.title = 'Please enter a valid positive number';
+        return false;
+    } else {
+        input.style.borderColor = '#28a745';
+        input.title = '';
+        return true;
+    }
+}
+
+function submitBlitzCacheForm() {
+    // Validate all inputs before submission
+    const inputs = document.querySelectorAll('#blitzCacheFilterForm input[type="text"]');
+    let allValid = true;
+
+    inputs.forEach(input => {
+        if (!validateNumber(input)) {
+            allValid = false;
+        }
+    });
+
+    // Only submit if all inputs are valid
+    if (allValid) {
+        document.getElementById('blitzCacheFilterForm').submit();
+    }
+}
+
+function clearAllFilters() {
+    const inputs = document.querySelectorAll('#blitzCacheFilterForm input[type="text"]');
+    inputs.forEach(input => {
+        input.value = '';
+        input.style.borderColor = '#ced4da';
+        input.title = '';
+    });
+    document.getElementById('blitzCacheFilterForm').submit();
+}
+</script>
 {% endblock %}

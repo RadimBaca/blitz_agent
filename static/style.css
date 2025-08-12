@@ -591,8 +591,8 @@ table tbody tr[style*="background-color: #e6f2ff"]:hover {
     margin-bottom: 20px;
     padding: 15px;
     background-color: #f8f9fa;
-    border-radius: 5px;
-    border: 1px solid #dee2e6;
+    border-radius: 2px;
+    /* border: 1px solid #dee2e6; */
 }
 
 .sidebar-filter-section label {
@@ -688,3 +688,53 @@ table tbody tr[style*="background-color: #e6f2ff"]:hover {
     word-wrap: break-word;
     max-width: calc(100% - 20px);
     display: inline-block;
+}
+
+/* Separator styling */
+.sidebar hr {
+    border: none;
+    border-top: 1px solid #dee2e6;
+    margin: 15px 0;
+}
+
+/* BlitzCache filter styles */
+.sidebar-metric-filter {
+    margin-bottom: 12px;
+}
+
+.sidebar-metric-filter label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 4px;
+    color: #495057;
+    font-size: 13px;
+}
+
+.sidebar-metric-filter input[type="text"] {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 13px;
+    background-color: white;
+    color: #495057;
+    box-sizing: border-box;
+    transition: border-color 0.3s ease;
+}
+
+.sidebar-metric-filter input[type="text"]:focus {
+    outline: none;
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.sidebar-metric-filter input[type="text"]::placeholder {
+    color: #6c757d;
+    font-style: italic;
+}
+
+.sidebar-filter-controls {
+    margin-top: 15px;
+    display: flex;
+    justify-content: center;
+}
