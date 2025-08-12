@@ -233,7 +233,8 @@ def procedure(display_name):
                            actual_db_id=get_actual_db_id())
 
     procedure_name = get_procedure_name(display_name)
-    blitz_records = dao.get_all_records(procedure_name, get_actual_db_id())
+    all_blitz_records = dao.get_all_records(procedure_name, get_actual_db_id())
+    blitz_records = all_blitz_records.copy()  # Make a copy for filtering
     current_connections = db_dao.get_all_db_connections()
 
     # Handle priority filtering for Blitz and Blitz Index
@@ -247,13 +248,41 @@ def procedure(display_name):
             except ValueError:
                 pass  # Invalid priority value, ignore filter
 
-    # Handle finding group filtering for Blitz Index
+    # Handle finding group filtering for Blitz and Blitz Index
     finding_groups = []
     selected_finding_groups = []
-    if display_name == "Blitz Index":
-        # Extract all unique finding groups from records
+
+    if display_name == "Blitz":
+        # Extract all unique findings from ALL records (not filtered ones) for filter display
         all_groups = set()
-        for record in blitz_records:
+        for record in all_blitz_records:
+            if record.finding:
+                all_groups.add(record.finding)
+
+        finding_groups = sorted(list(all_groups))
+
+        # Get selected finding groups from request
+        selected_finding_groups = request.args.getlist('finding_groups')
+
+        # Check if this is an explicit "deselect all" action
+        deselect_all = request.args.get('deselect_all') == 'true'
+
+        if deselect_all:
+            # Explicitly show no results
+            selected_finding_groups = []
+            blitz_records = []
+        elif not selected_finding_groups:
+            # If no groups selected and not explicit deselect, show all groups (default behavior)
+            selected_finding_groups = finding_groups
+        else:
+            # Filter records by selected finding groups
+            blitz_records = [record for record in blitz_records
+                           if record.finding and record.finding in selected_finding_groups]
+
+    elif display_name == "Blitz Index":
+        # Extract all unique finding groups from ALL records (not filtered ones) for filter display
+        all_groups = set()
+        for record in all_blitz_records:
             if record.finding and record.priority != -1:
                 if ':' in record.finding:
                     group = record.finding.split(':', 1)[0]
@@ -266,12 +295,19 @@ def procedure(display_name):
 
         # Get selected finding groups from request
         selected_finding_groups = request.args.getlist('finding_groups')
-        if not selected_finding_groups:
-            # If no groups selected, show all groups (default behavior)
-            selected_finding_groups = finding_groups
 
-        # Filter records by selected finding groups
-        if selected_finding_groups and selected_finding_groups != finding_groups:
+        # Check if this is an explicit "deselect all" action
+        deselect_all = request.args.get('deselect_all') == 'true'
+
+        if deselect_all:
+            # Explicitly show no results
+            selected_finding_groups = []
+            blitz_records = []
+        elif not selected_finding_groups:
+            # If no groups selected and not explicit deselect, show all groups (default behavior)
+            selected_finding_groups = finding_groups
+        else:
+            # Filter records by selected finding groups
             filtered_records = []
             for record in blitz_records:
                 if record.finding:
