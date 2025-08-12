@@ -1,11 +1,12 @@
+
+import os
+import datetime
 from flask import Flask, render_template, request, redirect, url_for, jsonify
 import pyodbc
-import os
 import markdown
 from markupsafe import Markup
 import sqlparse
 from dotenv import load_dotenv
-import datetime
 
 import src.agent_blitz_one_blitzindex as blitz_agent
 import src.result_DAO as dao
@@ -24,17 +25,17 @@ def get_procedure_name(display_name: str) -> str:
 def get_database_error_message(error: Exception, context: str = "operation", display_name: str = None) -> tuple:
     """
     Generate user-friendly error messages and HTML response for database connection issues.
-    
+
     Args:
         error: The exception that occurred
         context: Context of where the error occurred (e.g., "initialization", "analysis")
         display_name: The display name for the back link (optional)
-    
+
     Returns:
         A tuple of (HTML response string, HTTP status code)
     """
     error_str = str(error).lower()
-    
+
     if "timeout" in error_str:
         error_message = f"Database connection timeout during {context}. The database server may be unavailable or overloaded."
     elif "login" in error_str:
@@ -45,11 +46,11 @@ def get_database_error_message(error: Exception, context: str = "operation", dis
         error_message = f"Network connection failed during {context}. Please check your network connectivity."
     else:
         error_message = f"Database connection failed during {context}. Please check your database connection and try again."
-    
+
     back_link = ""
     if display_name:
         back_link = f"<p><a href='{url_for('procedure', display_name=display_name)}'>← Back to {display_name}</a></p>"
-    
+
     html_response = f"""
     <h1>Database Connection Error</h1>
     <p><strong>{error_message}</strong></p>
@@ -63,7 +64,7 @@ def get_database_error_message(error: Exception, context: str = "operation", dis
     <p><strong>Technical details:</strong> {str(error)}</p>
     {back_link}
     """
-    
+
     return html_response, 500
 
 
@@ -110,7 +111,7 @@ def select_database():
     selected_db_id = request.form.get("db_id")
     if selected_db_id:
         set_actual_db_id(int(selected_db_id))
-    
+
     # Redirect back to the current procedure
     display_name = request.form.get("current_proc", "Blitz")
     return redirect(url_for('procedure', display_name=display_name))
@@ -132,11 +133,11 @@ def add_database():
         db_port = int(request.form.get("db_port", 1433))
         db_user = request.form.get("db_user")
         db_password = request.form.get("db_password")
-        
+
         # Validate required fields
         if not all([db_name, db_host, db_user, db_password]):
             raise ValueError("All fields are required")
-        
+
         # Create new database connection
         new_connection = db_dao.DatabaseConnection(
             db_name=db_name,
@@ -145,15 +146,15 @@ def add_database():
             db_host=db_host,
             db_port=db_port
         )
-        
+
         # Insert and set as active
         new_db_id = db_dao.insert_db(new_connection)
         set_actual_db_id(new_db_id)
-        
+
         # Redirect back to the current procedure
         display_name = request.form.get("current_proc", "Blitz")
         return redirect(url_for('procedure', display_name=display_name))
-        
+
     except Exception as e:
         # Handle errors - in a real app, you'd want better error handling
         print(f"Error adding database: {e}")
@@ -165,17 +166,17 @@ def delete_database():
     """Handle deleting a database connection"""
     try:
         db_id_to_delete = int(request.form.get("db_id"))
-        
+
         # First clear all data associated with this database
         dao.clear_all(db_id_to_delete)
-        
+
         # Don't allow deleting if it's the only connection
         all_connections = db_dao.get_all_db_connections()
         if len(all_connections) <= 1:
             print("Cannot delete the last database connection")
             display_name = request.form.get("current_proc", "Blitz")
             return redirect(url_for('procedure', display_name=display_name))
-        
+
         # If deleting the currently active database, switch to another one
         current_db_id = get_actual_db_id()
         if db_id_to_delete == current_db_id:
@@ -184,14 +185,14 @@ def delete_database():
                 if conn.db_id != db_id_to_delete:
                     set_actual_db_id(conn.db_id)
                     break
-        
+
         # Delete the connection
         db_dao.delete_db(db_id_to_delete)
-        
+
         # Redirect back to the current procedure
         display_name = request.form.get("current_proc", "Blitz")
         return redirect(url_for('procedure', display_name=display_name))
-        
+
     except Exception as e:
         print(f"Error deleting database: {e}")
         display_name = request.form.get("current_proc", "Blitz")
@@ -217,7 +218,7 @@ def procedure(display_name):
     # Skip favicon.ico requests that get caught by this route
     if display_name == 'favicon.ico':
         return '', 404
-        
+
     # Determine which template to use based on display_name
     if display_name == "Blitz":
         template_name = "blitz.html"
@@ -233,23 +234,23 @@ def procedure(display_name):
 
     procedure_name = get_procedure_name(display_name)
     blitz_records = dao.get_all_records(procedure_name, get_actual_db_id())
-    
+
     # Handle sorting for BlitzCache
     if display_name == "Blitz Cache":
         sort_by = request.args.get('sort_by')
         sort_order = request.args.get('sort_order', 'desc')  # Default to descending
-        
+
         if sort_by in ['avg_cpu_ms', 'total_cpu_ms']:
             reverse = (sort_order == 'desc')
             # Sort records, handling None values by placing them at the end
-            blitz_records = sorted(blitz_records, 
-                                 key=lambda x: getattr(x, sort_by) or 0, 
+            blitz_records = sorted(blitz_records,
+                                 key=lambda x: getattr(x, sort_by) or 0,
                                  reverse=reverse)
-    
+
     # Pass Pydantic models directly to template
     # Get fresh list of connections for the combobox
     current_connections = db_dao.get_all_db_connections()
-    
+
     return render_template(template_name,
                            proc_name=display_name,
                            procedures=PROCEDURES,
@@ -263,14 +264,14 @@ def procedure(display_name):
 def init(display_name):
     try:
         procedure_name = get_procedure_name(display_name)
-        
+
         # Get database name for procedures that require it
         db_connection = db_dao.get_db(get_actual_db_id())
         database_name = db_connection.db_name if db_connection else None
-        
+
         with get_connection() as conn:
             cursor = conn.cursor()
-            
+
             # Add @DatabaseName parameter for sp_BlitzCache and sp_BlitzIndex
             if procedure_name in ['sp_BlitzCache', 'sp_BlitzIndex'] and database_name:
                 cursor.execute(f"EXEC {procedure_name} @DatabaseName = ?", (database_name,))
@@ -294,7 +295,7 @@ def init(display_name):
         dao.store_records(procedure_name, records, get_actual_db_id())
         # dao.delete_chat_sessions(get_procedure_name(display_name), actual_db_id)
         return redirect(url_for('procedure', display_name=display_name))
-    
+
     except (pyodbc.Error, ValueError) as e:
         return get_database_error_message(e, "initialization", display_name)
 
@@ -344,7 +345,5 @@ PORT = int(os.getenv("APP_PORT", '5001'))
 
 if __name__ == "__main__":
     conn = get_connection()
-    conn.close()  
+    conn.close()
     app.run(debug=True, host="0.0.0.0", port=PORT)
-
-

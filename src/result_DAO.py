@@ -14,17 +14,17 @@ def _map_raw_record_to_model(proc_name: str, raw_record: Dict[str, Any], procedu
     """Map raw database record to Pydantic model using column mapping"""
     model_class = PROCEDURE_MODELS[proc_name]
     column_map = COLUMN_MAPPING[proc_name]
-    
+
     # Map raw columns to model field names
     mapped_data = {}
     for raw_col, model_field in column_map.items():
         if raw_col in raw_record:
             mapped_data[model_field] = raw_record[raw_col]
-    
+
     # Add required fields
     mapped_data["procedure_order"] = procedure_order
     mapped_data["pc_id"] = pc_id
-    
+
     return model_class(**mapped_data)
 
 
@@ -48,18 +48,18 @@ def store_records(proc_name: str, records: List[Dict[str, Any]], db_id: int):
         # Insert a new Procedure_call with db_id
         conn.execute("INSERT INTO Procedure_call (run, p_id, db_id) VALUES (datetime('now'), ?, ?)", (p_id, db_id))
         pc_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-        
+
         # Get table name
         table_name = PROCEDURE_TABLE_NAMES[proc_name]
-        
+
         # Insert records using Pydantic models for validation
         for i, raw_record in enumerate(records):
             # Create and validate the Pydantic model
             record_model = _map_raw_record_to_model(proc_name, raw_record, i, pc_id)
-            
+
             # Convert model to dict for database insertion
             model_dict = record_model.model_dump(exclude={'_analyzed'})  # Exclude computed fields
-            
+
             # Build INSERT statement from validated model data
             fields = []
             values = []
@@ -67,12 +67,12 @@ def store_records(proc_name: str, records: List[Dict[str, Any]], db_id: int):
                 if value is not None:  # Only insert non-None values
                     fields.append(field)
                     values.append(value)
-            
+
             if fields:  # Only insert if we have data
                 placeholders = ["?"] * len(fields)
                 sql = f"INSERT INTO {table_name} ({', '.join(fields)}) VALUES ({', '.join(placeholders)})"
                 conn.execute(sql, values)
-        
+
         conn.commit()
     finally:
         conn.close()
@@ -92,12 +92,12 @@ def get_all_records(proc_name: str, db_id: int) -> List[Union[BlitzRecord, Blitz
         id_field = PROCEDURE_ID_FIELDS[proc_name]
         chat_table = PROCEDURE_CHAT_TABLE_NAMES[proc_name]
         model_class = PROCEDURE_MODELS[proc_name]
-        
+
         # Build SELECT query dynamically
         column_map = COLUMN_MAPPING[proc_name]
         select_fields = [f"r.{field}" for field in column_map.values()]
         select_fields.extend(["r.procedure_order", f"r.{id_field}"])
-        
+
         cur = conn.execute(
             f"""
             SELECT {', '.join(select_fields)},
@@ -111,24 +111,24 @@ def get_all_records(proc_name: str, db_id: int) -> List[Union[BlitzRecord, Blitz
             ORDER BY pc.run DESC, r.procedure_order ASC
             """, (proc_name, db_id)
         )
-        
+
         records = []
         for row in cur.fetchall():
             # Build model data from database row
             model_data = {}
-            
+
             # Map database fields to model fields
             for i, field in enumerate(column_map.values()):
                 model_data[field] = row[i]
-            
+
             # Add metadata fields
             procedure_order_idx = len(column_map)
             id_field_idx = len(column_map) + 1
             chat_count_idx = len(column_map) + 2
-            
+
             model_data["procedure_order"] = row[procedure_order_idx]
             model_data["pc_id"] = 0  # Not needed for display, but required by model
-            
+
             # Add the record ID field dynamically
             if proc_name == "sp_Blitz":
                 model_data["pb_id"] = row[id_field_idx]
@@ -136,13 +136,13 @@ def get_all_records(proc_name: str, db_id: int) -> List[Union[BlitzRecord, Blitz
                 model_data["pbi_id"] = row[id_field_idx]
             elif proc_name == "sp_BlitzCache":
                 model_data["pbc_id"] = row[id_field_idx]
-            
+
             # Create Pydantic model instance
             record_model = model_class(**model_data)
             # Explicitly set the _analyzed field after model creation
             setattr(record_model, '_analyzed', row[chat_count_idx] > 0)
             records.append(record_model)
-        
+
         return records
     finally:
         conn.close()
@@ -159,7 +159,7 @@ def get_record(proc_name: str, rec_id: int) -> Union[BlitzRecord, BlitzIndexReco
         id_field = PROCEDURE_ID_FIELDS[proc_name]
         select_fields = [f"r.{field}" for field in column_map.values()]
         select_fields.extend([f"r.{id_field}"])
-        
+
         cur = conn.execute(
             f"""
             SELECT {', '.join(select_fields)}
@@ -174,17 +174,17 @@ def get_record(proc_name: str, rec_id: int) -> Union[BlitzRecord, BlitzIndexReco
         row = cur.fetchone()
         if not row:
             raise IndexError("No record with this rec_id")
-        
+
         # Build model data from database row
         model_data = {}
         for i, field in enumerate(column_map.values()):
             model_data[field] = row[i]
-        
+
         # Add required fields
         model_data["procedure_order"] = rec_id
         model_data["pc_id"] = 0  # Not needed for display
         model_data["_analyzed"] = False  # Will be set separately if needed
-        
+
         # Add the record ID field
         id_field_idx = len(column_map)
         if proc_name == "sp_Blitz":
@@ -193,7 +193,7 @@ def get_record(proc_name: str, rec_id: int) -> Union[BlitzRecord, BlitzIndexReco
             model_data["pbi_id"] = row[id_field_idx]
         elif proc_name == "sp_BlitzCache":
             model_data["pbc_id"] = row[id_field_idx]
-        
+
         # Create and return Pydantic model instance
         return model_class(**model_data)
     finally:
@@ -208,7 +208,7 @@ def store_chat_history(proc_name: str, rec_id: int, chat_history: List[Tuple[str
         table_name = PROCEDURE_TABLE_NAMES[proc_name]
         chat_table = PROCEDURE_CHAT_TABLE_NAMES[proc_name]
         id_field = PROCEDURE_ID_FIELDS[proc_name]
-        
+
         # Get the record ID for this proc_name and rec_id
         cur = conn.execute(
             f"""
@@ -225,10 +225,10 @@ def store_chat_history(proc_name: str, rec_id: int, chat_history: List[Tuple[str
         if not row:
             raise IndexError("No record with this rec_id")
         record_pk_id = row[0]
-        
+
         # Remove previous chat for this record
         delete_chat_session_by_record_id(proc_name, record_pk_id)
-        
+
         # Insert chat history as rows, one per tuple, preserving order
         for i, (role, msg) in enumerate(chat_history):
             conn.execute(
@@ -248,7 +248,7 @@ def get_chat_history(proc_name: str, rec_id: int) -> Optional[List[Tuple[str, st
         table_name = PROCEDURE_TABLE_NAMES[proc_name]
         chat_table = PROCEDURE_CHAT_TABLE_NAMES[proc_name]
         id_field = PROCEDURE_ID_FIELDS[proc_name]
-        
+
         cur = conn.execute(
             f"""
             SELECT c.type, c.response
@@ -277,7 +277,7 @@ def clear_all(db_id: int):
         for proc_name in PROCEDURE_MODELS.keys():
             delete_chat_sessions(proc_name, db_id)
             delete_results(proc_name, db_id)
-        
+
         # Delete procedure calls for this db_id
         conn.execute("DELETE FROM Procedure_call WHERE db_id = ?", (db_id,))
         conn.commit()
@@ -312,7 +312,7 @@ def delete_chat_sessions(proc_name: str, db_id: int):
         table_name = PROCEDURE_TABLE_NAMES[proc_name]
         chat_table = PROCEDURE_CHAT_TABLE_NAMES[proc_name]
         id_field = PROCEDURE_ID_FIELDS[proc_name]
-        
+
         conn.execute(f"""
             DELETE FROM {chat_table}
             WHERE {id_field} IN (
@@ -334,7 +334,7 @@ def delete_chat_session_by_record_id(proc_name: str, record_pk_id: int):
     try:
         chat_table = PROCEDURE_CHAT_TABLE_NAMES[proc_name]
         id_field = PROCEDURE_ID_FIELDS[proc_name]
-        
+
         conn.execute(f"""
             DELETE FROM {chat_table}
             WHERE {id_field} = ?

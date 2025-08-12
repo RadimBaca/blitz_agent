@@ -11,14 +11,14 @@ actual_db_id = -1
 def build_connection_string(host: str, port: int, database: str, user: str, password: str) -> str:
     """
     Build SQL Server connection string with the provided parameters.
-    
+
     Args:
         host: Database server host
         port: Database server port
         database: Database name
         user: Database username
         password: Database password
-        
+
     Returns:
         Formatted connection string for SQL Server
     """
@@ -41,7 +41,7 @@ def get_connection():
     This function can be imported by both app.py and agent modules.
     """
     global actual_db_id
-    
+
     try:
         # Get environment variables
         mssql_host = os.getenv('MSSQL_HOST')
@@ -49,11 +49,11 @@ def get_connection():
         mssql_user = os.getenv('MSSQL_USER')
         mssql_password = os.getenv('MSSQL_PASSWORD')
         mssql_db = os.getenv('MSSQL_DB')
-        
+
         # Validate required environment variables
         if not all([mssql_host, mssql_user, mssql_password, mssql_db]):
             raise ValueError("Missing required MSSQL environment variables")
-        
+
         # Step 1: Check if database connection exists in Database_connection table
         if actual_db_id == -1:
             actual_db_id = db_dao.exists_db(mssql_host, mssql_port, mssql_user)
@@ -81,10 +81,10 @@ def get_connection():
                 db_host=mssql_host,
                 db_port=mssql_port
             )
-            
+
             # Insert the new connection and get the db_id
             actual_db_id = db_dao.insert_db(new_db_connection)
-            
+
             # Use environment variables for connection
             conn_str = build_connection_string(
                 mssql_host,
@@ -93,9 +93,9 @@ def get_connection():
                 mssql_user,
                 mssql_password
             )
-        
+
         return pyodbc.connect(conn_str)
-    
+
     except (pyodbc.Error, ValueError) as e:
         # If database connection management fails, fallback to direct environment connection
         print(f"Warning: Database connection management failed: {e}. Using direct environment connection.")
