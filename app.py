@@ -247,6 +247,42 @@ def procedure(display_name):
             except ValueError:
                 pass  # Invalid priority value, ignore filter
 
+    # Handle finding group filtering for Blitz Index
+    finding_groups = []
+    selected_finding_groups = []
+    if display_name == "Blitz Index":
+        # Extract all unique finding groups from records
+        all_groups = set()
+        for record in blitz_records:
+            if record.finding and record.priority != -1:
+                if ':' in record.finding:
+                    group = record.finding.split(':', 1)[0]
+                    all_groups.add(group)
+            elif record.priority == -1:
+                # Priority -1 findings don't follow the group:subcategory format
+                all_groups.add('Priority -1')
+
+        finding_groups = sorted(list(all_groups))
+
+        # Get selected finding groups from request
+        selected_finding_groups = request.args.getlist('finding_groups')
+        if not selected_finding_groups:
+            # If no groups selected, show all groups (default behavior)
+            selected_finding_groups = finding_groups
+
+        # Filter records by selected finding groups
+        if selected_finding_groups and selected_finding_groups != finding_groups:
+            filtered_records = []
+            for record in blitz_records:
+                if record.finding:
+                    if record.priority == -1 and 'Priority -1' in selected_finding_groups:
+                        filtered_records.append(record)
+                    elif record.priority != -1 and ':' in record.finding:
+                        group = record.finding.split(':', 1)[0]
+                        if group in selected_finding_groups:
+                            filtered_records.append(record)
+            blitz_records = filtered_records
+
     # Handle sorting for BlitzCache
     if display_name == "Blitz Cache":
         sort_by = request.args.get('sort_by')
@@ -269,7 +305,9 @@ def procedure(display_name):
                            actual_db_id=get_actual_db_id(),
                            current_sort_by=request.args.get('sort_by'),
                            current_sort_order=request.args.get('sort_order', 'desc'),
-                           current_max_priority=request.args.get('max_priority'))
+                           current_max_priority=request.args.get('max_priority'),
+                           finding_groups=finding_groups,
+                           selected_finding_groups=selected_finding_groups)
 
 @app.route("/init/<display_name>", methods=["POST"])
 def init(display_name):

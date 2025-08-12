@@ -9,12 +9,13 @@
 {% block content %}
 
             {% if records %}
-                <div class="blitzindex-summary">
+                <!-- <div class="blitzindex-summary">
                     <p>Found {{ records|length }} index-related findings. Items highlighted in blue have been analyzed.</p>
-                </div>
-                
-                <!-- Priority Filter -->
+                </div> -->
+
+                <!-- Filters -->
                 <div class="filter-controls">
+                    <!-- Priority Filter -->
                     <form method="get" class="priority-filter-form">
                         <label for="max_priority">Show only issues with priority ≤:</label>
                         <select name="max_priority" id="max_priority" onchange="this.form.submit()">
@@ -25,9 +26,42 @@
                             <option value="100" {% if current_max_priority == "100" %}selected{% endif %}>≤ 100 (Low)</option>
                             <option value="200" {% if current_max_priority == "200" %}selected{% endif %}>≤ 200 (Info)</option>
                         </select>
+                        <!-- Hidden fields to preserve finding group selection -->
+                        {% for group in selected_finding_groups %}
+                            <input type="hidden" name="finding_groups" value="{{ group }}">
+                        {% endfor %}
                     </form>
+
+                    <!-- Finding Groups Filter -->
+                    {% if finding_groups %}
+                    <div class="finding-groups-filter">
+                        <form method="get" class="finding-groups-form" id="findingGroupsForm">
+                            <label>Show finding groups:</label>
+                            <!-- Hidden field to preserve priority selection -->
+                            {% if current_max_priority %}
+                                <input type="hidden" name="max_priority" value="{{ current_max_priority }}">
+                            {% endif %}
+
+                            <div class="finding-groups-controls">
+                                <button type="button" onclick="selectAllGroups()" class="group-control-btn">Select All</button>
+                                <button type="button" onclick="deselectAllGroups()" class="group-control-btn">Deselect All</button>
+                            </div>
+
+                            <div class="finding-groups-checkboxes">
+                                {% for group in finding_groups %}
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" name="finding_groups" value="{{ group }}"
+                                               {% if group in selected_finding_groups %}checked{% endif %}
+                                               onchange="submitFindingGroupsForm()">
+                                        <span class="checkbox-text">{{ group }}</span>
+                                    </label>
+                                {% endfor %}
+                            </div>
+                        </form>
+                    </div>
+                    {% endif %}
                 </div>
-                
+
                 <table>
                     <thead>
                         <tr>
@@ -59,4 +93,28 @@
                 </div>
             {% endif %}
 
+{% endblock %}
+
+{% block script %}
+<script>
+function selectAllGroups() {
+    const checkboxes = document.querySelectorAll('input[name="finding_groups"]');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = true;
+    });
+    submitFindingGroupsForm();
+}
+
+function deselectAllGroups() {
+    const checkboxes = document.querySelectorAll('input[name="finding_groups"]');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = false;
+    });
+    submitFindingGroupsForm();
+}
+
+function submitFindingGroupsForm() {
+    document.getElementById('findingGroupsForm').submit();
+}
+</script>
 {% endblock %}
