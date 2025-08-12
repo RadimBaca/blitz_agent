@@ -450,8 +450,10 @@ def init(display_name):
             cursor = db_connection.cursor()
 
             # Add @DatabaseName parameter for sp_BlitzCache and sp_BlitzIndex
-            if procedure_name in ['sp_BlitzCache', 'sp_BlitzIndex'] and database_name:
+            if procedure_name == 'sp_BlitzCache' and database_name:
                 cursor.execute(f"EXEC {procedure_name} @DatabaseName = ?", (database_name,))
+            elif procedure_name == 'sp_BlitzIndex' and database_name:
+                cursor.execute(f"EXEC {procedure_name} @Mode=4, @DatabaseName = ?", (database_name,))
             else:
                 cursor.execute(f"EXEC {procedure_name}")
 
