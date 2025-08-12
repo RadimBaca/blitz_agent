@@ -10,7 +10,11 @@
 <!-- BlitzCache Filters -->
 <div class="sidebar-filter-section">
     <form method="get" class="sidebar-blitzcache-filter-form" id="blitzCacheFilterForm">
-        <label>Filter Criteria:</label>
+        <label>Filters</label>
+
+        <div class="sidebar-filter-controls">
+            <button type="button" onclick="clearAllFilters()" class="sidebar-control-btn">Clear All</button>
+        </div>
 
         <div class="sidebar-metric-filter">
             <label for="min_avg_cpu">Min Avg CPU (ms):</label>
@@ -65,9 +69,6 @@
             <input type="hidden" name="end_hour" id="end_hour" value="{{ current_end_hour if current_end_hour else '' }}">
         </div>
 
-        <div class="sidebar-filter-controls">
-            <button type="button" onclick="clearAllFilters()" class="sidebar-control-btn">Clear All</button>
-        </div>
     </form>
 </div>
 {% endblock %}

@@ -734,7 +734,7 @@ table tbody tr[style*="background-color: #e6f2ff"]:hover {
 }
 
 .sidebar-filter-controls {
-    margin-top: 15px;
+    margin: 15px;
     display: flex;
     justify-content: center;
 }
