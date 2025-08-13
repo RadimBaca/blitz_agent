@@ -7,6 +7,7 @@ class BlitzRecord(BaseModel):
     finding: Optional[str] = None
     details: Optional[str] = None
     priority: Optional[int] = None
+    raw_record: Optional[str] = None
     procedure_order: int
     pc_id: int
     _analyzed: bool = False
@@ -25,6 +26,7 @@ class BlitzIndexRecord(BaseModel):
     finding: Optional[str] = None
     details_schema_table_index_indexid: Optional[str] = None
     priority: Optional[int] = None
+    raw_record: Optional[str] = None
     procedure_order: int
     pc_id: int
     _analyzed: bool = False
@@ -47,6 +49,7 @@ class BlitzCacheRecord(BaseModel):
     total_reads: Optional[int] = None
     last_execution: Optional[str] = None  # Using string for timestamp compatibility
     warnings: Optional[str] = None
+    raw_record: Optional[str] = None
     procedure_order: int
     pc_id: int
     _analyzed: bool = False
@@ -79,9 +82,9 @@ PROCEDURE_MODELS = {
 }
 
 PROCEDURE_DISPLAY_KEYS = {
-    "sp_Blitz": ["finding", "details", "priority"],
-    "sp_BlitzIndex": ["finding", "details_schema_table_index_indexid", "priority"],
-    "sp_BlitzCache": ["query_text", "avg_cpu_ms", "total_cpu_ms", "executions", "total_reads", "last_execution", "warnings"],
+    "sp_Blitz": ["finding", "details", "priority", "raw_record"],
+    "sp_BlitzIndex": ["finding", "details_schema_table_index_indexid", "priority", "raw_record"],
+    "sp_BlitzCache": ["query_text", "avg_cpu_ms", "total_cpu_ms", "executions", "total_reads", "last_execution", "warnings", "raw_record"],
 }
 
 PROCEDURE_TABLE_NAMES = {
@@ -108,11 +111,13 @@ COLUMN_MAPPING = {
         "Finding": "finding",
         "Details": "details",
         "Priority": "priority",
+        "raw_record": "raw_record",
     },
     "sp_BlitzIndex": {
         "Finding": "finding",
         "Details: schema.table.index(indexid)": "details_schema_table_index_indexid",
         "Priority": "priority",
+        "raw_record": "raw_record",
     },
     "sp_BlitzCache": {
         "Query Text": "query_text",
@@ -122,5 +127,6 @@ COLUMN_MAPPING = {
         "Total Reads": "total_reads",
         "Last Execution": "last_execution",
         "Warnings": "warnings",
+        "raw_record": "raw_record",
     },
 }
