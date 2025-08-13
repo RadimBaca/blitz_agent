@@ -26,7 +26,8 @@ CREATE TABLE Procedure_blitz (
   pc_id INTEGER NOT NULL REFERENCES Procedure_call (pc_id),
   finding TEXT,
   details TEXT,
-  priority INTEGER
+  priority INTEGER,
+  raw_record TEXT
 );
 
 CREATE TABLE Procedure_blitzindex (
@@ -35,7 +36,8 @@ CREATE TABLE Procedure_blitzindex (
   pc_id INTEGER NOT NULL REFERENCES Procedure_call (pc_id),
   finding TEXT,
   details_schema_table_index_indexid TEXT,
-  priority INTEGER
+  priority INTEGER,
+  raw_record TEXT
 );
 
 CREATE TABLE Procedure_blitzcache (
@@ -48,7 +50,8 @@ CREATE TABLE Procedure_blitzcache (
   executions INTEGER,
   total_reads INTEGER,
   last_execution TIMESTAMP,
-  warnings TEXT
+  warnings TEXT,
+  raw_record TEXT
 );
 
 -- Chat tables for each procedure type

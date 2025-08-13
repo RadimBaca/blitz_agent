@@ -5,6 +5,7 @@ from .models import (
     PROCEDURE_MODELS, PROCEDURE_TABLE_NAMES,
     PROCEDURE_CHAT_TABLE_NAMES, PROCEDURE_ID_FIELDS, COLUMN_MAPPING
 )
+import json
 
 # Initialize database on module import
 _ensure_db()
@@ -24,6 +25,9 @@ def _map_raw_record_to_model(proc_name: str, raw_record: Dict[str, Any], procedu
     # Add required fields
     mapped_data["procedure_order"] = procedure_order
     mapped_data["pc_id"] = pc_id
+
+    # Store the entire raw record as JSON string for the raw_record field
+    mapped_data["raw_record"] = json.dumps(raw_record, default=str)
 
     return model_class(**mapped_data)
 
