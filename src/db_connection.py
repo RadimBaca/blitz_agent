@@ -117,3 +117,10 @@ def set_actual_db_id(db_id: int):
     """Set the actual_db_id value"""
     global actual_db_id
     actual_db_id = db_id
+
+def get_actual_db_name():
+    """Get the name of the currently connected database"""
+    db_connection = db_dao.get_db(actual_db_id)
+    if db_connection:
+        return db_connection.db_name
+    return None

@@ -1,17 +1,20 @@
 
 import os
 import datetime
+import json
 from flask import Flask, render_template, request, redirect, url_for
 import pyodbc
 import markdown
 from markupsafe import Markup
 import sqlparse
 from dotenv import load_dotenv
+from datetime import datetime as dt_parser
 
 import src.agent_blitz_one_blitzindex as blitz_agent
 import src.result_DAO as dao
 import src.db_DAO as db_dao
-from src.db_connection import get_connection, get_actual_db_id, set_actual_db_id
+import src.db_connection as db_conn
+
 
 connections = db_dao.get_all_db_connections()
 
@@ -102,7 +105,7 @@ def markdown_filter(text):
 
 @app.route("/clear_all", methods=["POST"])
 def clear_all_route():
-    dao.clear_all(get_actual_db_id())
+    dao.clear_all(db_conn.get_actual_db_id())
     return redirect(url_for("home"))
 
 @app.route("/select_database", methods=["POST"])
@@ -110,7 +113,7 @@ def select_database():
     """Handle database selection from the combobox"""
     selected_db_id = request.form.get("db_id")
     if selected_db_id:
-        set_actual_db_id(int(selected_db_id))
+        db_conn.set_actual_db_id(int(selected_db_id))
 
     # Redirect back to the current procedure
     display_name = request.form.get("current_proc", "Blitz")
@@ -149,7 +152,7 @@ def add_database():
 
         # Insert and set as active
         new_db_id = db_dao.insert_db(new_connection)
-        set_actual_db_id(new_db_id)
+        db_conn.set_actual_db_id(new_db_id)
 
         # Redirect back to the current procedure
         display_name = request.form.get("current_proc", "Blitz")
@@ -178,12 +181,12 @@ def delete_database():
             return redirect(url_for('procedure', display_name=display_name))
 
         # If deleting the currently active database, switch to another one
-        current_db_id = get_actual_db_id()
+        current_db_id = db_conn.get_actual_db_id()
         if db_id_to_delete == current_db_id:
             # Find the first connection that's not the one being deleted
             for connection in all_connections:
                 if connection.db_id != db_id_to_delete:
-                    set_actual_db_id(connection.db_id)
+                    db_conn.set_actual_db_id(connection.db_id)
                     break
 
         # Delete the connection
@@ -207,7 +210,7 @@ def administration():
                            proc_name="Administration",
                            procedures=PROCEDURES,
                            connections=current_connections,
-                           actual_db_id=get_actual_db_id())
+                           actual_db_id=db_conn.get_actual_db_id())
 
 @app.route("/")
 def home():
@@ -230,10 +233,10 @@ def procedure(display_name):
         return render_template("notfound.html",
                            proc_name=display_name,
                            procedures=PROCEDURES,
-                           actual_db_id=get_actual_db_id())
+                           actual_db_id=db_conn.get_actual_db_id())
 
     procedure_name = get_procedure_name(display_name)
-    blitz_records = dao.get_all_records(procedure_name, get_actual_db_id())
+    blitz_records = dao.get_all_records(procedure_name, db_conn.get_actual_db_id())
     current_connections = db_dao.get_all_db_connections()
 
     # Handle priority filtering for Blitz and Blitz Index
@@ -376,8 +379,6 @@ def procedure(display_name):
                                 execution_hour = record.last_execution.hour
                             else:
                                 # It's a string, try to parse it
-                                from datetime import datetime as dt_parser
-                                # Try common datetime formats, including ISO format
                                 execution_hour = None
                                 for fmt in ['%Y-%m-%dT%H:%M:%S.%f', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M:%S.%f', '%m/%d/%Y %H:%M:%S']:
                                     try:
@@ -423,7 +424,7 @@ def procedure(display_name):
                            procedures=PROCEDURES,
                            records=blitz_records,
                            connections=current_connections,
-                           actual_db_id=get_actual_db_id(),
+                           actual_db_id=db_conn.get_actual_db_id(),
                            current_sort_by=request.args.get('sort_by'),
                            current_sort_order=request.args.get('sort_order', 'desc'),
                            current_max_priority=request.args.get('max_priority'),
@@ -443,10 +444,10 @@ def init(display_name):
         procedure_name = get_procedure_name(display_name)
 
         # Get database name for procedures that require it
-        db_connection = db_dao.get_db(get_actual_db_id())
+        db_connection = db_dao.get_db(db_conn.get_actual_db_id())
         database_name = db_connection.db_name if db_connection else None
 
-        with get_connection() as db_connection:
+        with db_conn.get_connection() as db_connection:
             cursor = db_connection.cursor()
 
             # Add @DatabaseName parameter for sp_BlitzCache and sp_BlitzIndex
@@ -471,7 +472,7 @@ def init(display_name):
                 # Store the original SQL Server data for the DAO
                 records.append(serialized_full)
 
-        dao.store_records(procedure_name, records, get_actual_db_id())
+        dao.store_records(procedure_name, records, db_conn.get_actual_db_id())
         # dao.delete_chat_sessions(get_procedure_name(display_name), actual_db_id)
         return redirect(url_for('procedure', display_name=display_name))
 
@@ -500,12 +501,18 @@ def analyze(display_name, rec_id):
 
         chat_history = dao.get_chat_history(procedure_name, rec_id)
         if not chat_history:
-            # Convert Pydantic model to dict for the agent
-            record_dict = record.model_dump()
+            # Use the raw_record from the database for the agent prompt
+            raw_record_data = json.loads(record.raw_record) if record.raw_record else {}
+
             user_question = blitz_agent._load_prompt_for(
-                get_procedure_name(display_name), record_dict, os.getenv("MSSQL_DB", "sqlbench")
+                get_procedure_name(display_name), raw_record_data, db_conn.get_actual_db_name()
             )
+            print(f"Initial user question: {user_question}")
+            # For display purposes, show the formatted record data
+            record_dict = record.model_dump()
+            record_dict.pop("raw_record", None)
             store_user_question = "\n".join(f"**{k}**: {v}" for k, v in record_dict.items())
+
             result = blitz_agent.agent_executor.invoke({"input": user_question, "chat_history": []})
             chat_history = [("user", store_user_question), ("ai", result["output"])]
             dao.store_chat_history(procedure_name, rec_id, chat_history)
@@ -516,13 +523,13 @@ def analyze(display_name, rec_id):
                             chat_history=chat_history,
                             procedures=PROCEDURES,
                             connections=db_dao.get_all_db_connections(),
-                            actual_db_id=get_actual_db_id())
+                            actual_db_id=db_conn.get_actual_db_id())
     except (pyodbc.Error, ValueError) as e:
         return get_database_error_message(e, "analysis", display_name)
 
 PORT = int(os.getenv("APP_PORT", '5001'))
 
 if __name__ == "__main__":
-    conn = get_connection()
+    conn = db_conn.get_connection()
     conn.close()
     app.run(debug=True, host="0.0.0.0", port=PORT)
