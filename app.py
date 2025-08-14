@@ -504,7 +504,7 @@ def analyze(display_name, rec_id):
             # Use the raw_record from the database for the agent prompt
             raw_record_data = json.loads(record.raw_record) if record.raw_record else {}
 
-            user_question = blitz_agent.INITIAL_USER_QUESTION_TEMPLATE.format(
+            user_question = blitz_agent._load_prompt_for(
                 get_procedure_name(display_name), raw_record_data, db_conn.get_actual_db_name()
             )
             print(f"Initial user question: {user_question}")
