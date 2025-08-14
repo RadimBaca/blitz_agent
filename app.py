@@ -502,7 +502,7 @@ def analyze(display_name, rec_id):
         if not chat_history:
             # Convert Pydantic model to dict for the agent
             record_dict = record.model_dump()
-            user_question = blitz_agent.INITIAL_USER_QUESTION_TEMPLATE.format(
+            user_question = blitz_agent._load_prompt_for(
                 get_procedure_name(display_name), record_dict, os.getenv("MSSQL_DB", "sqlbench")
             )
             store_user_question = "\n".join(f"**{k}**: {v}" for k, v in record_dict.items())

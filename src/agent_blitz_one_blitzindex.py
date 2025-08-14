@@ -1,11 +1,9 @@
 from typing import List
 import os
-import shelve
 import io
 import csv
 import pyodbc
 import sys
-from dotenv import load_dotenv
 
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.documents import Document
@@ -18,9 +16,6 @@ from langchain_community.vectorstores import Chroma
 # Import the centralized connection function
 from .db_connection import get_connection
 
-
-# Init
-load_dotenv()
 # Always resolve vector store relative to project root, not src/
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 rag_directory = os.path.join(project_root, "db", "chroma_db_firecrawl")
@@ -38,7 +33,7 @@ retriever = db.as_retriever(search_type="similarity", search_kwargs={"k": 5})
 
 
 
-# 🔧 Definice run_sqlserver_query_as_csv Tool metody
+# Tool: run_sqlserver_query_as_csv
 @tool
 def run_sqlserver_query_as_csv(query: str, params: tuple = (), max_rows: int = 50) -> str:
     """
@@ -47,10 +42,8 @@ def run_sqlserver_query_as_csv(query: str, params: tuple = (), max_rows: int = 5
     Avoid calling the same query multiple times
     """
     try:
-        # Use the centralized connection function
         with get_connection() as conn:
             cursor = conn.cursor()
-
             try:
                 cursor.execute(query, params)
             except pyodbc.ProgrammingError as e:
@@ -72,8 +65,6 @@ def run_sqlserver_query_as_csv(query: str, params: tuple = (), max_rows: int = 5
             writer.writerows(rows)
 
             sqlserver_result = output.getvalue()
-
-             # limit maximum lebgth of CSV to prevent excessive output
             max_csv_len = 100000
             if len(sqlserver_result) > max_csv_len:
                 return sqlserver_result[:max_csv_len] + "\n...[TRUNCATED]"
@@ -98,7 +89,6 @@ def query_knowledge_base(query: str) -> str:
     return vector_result
 
 
-
 prompt_template = ChatPromptTemplate.from_messages([
     ("system", "Odpovez na otazku jak nejlepe umis."),
     MessagesPlaceholder(variable_name="chat_history"),
@@ -106,59 +96,66 @@ prompt_template = ChatPromptTemplate.from_messages([
     MessagesPlaceholder(variable_name="agent_scratchpad")
 ])
 
-tools = [run_sqlserver_query_as_csv,
-         query_knowledge_base]
+tools = [run_sqlserver_query_as_csv, query_knowledge_base]
 
 llm = ChatOpenAI(model_name="gpt-4o-mini", temperature=0)
 
-# 🔗 Agent
+# Agent
 agent = create_tool_calling_agent(llm=llm, tools=tools, prompt=prompt_template)
 agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True, max_iterations=2000)
 
-INITIAL_USER_QUESTION_TEMPLATE = """
-You are an expert in SQL Server performance tuning.
 
-Here is one row from the {} output that needs to be interpreted and analyzed:\n
-{}\n
 
-The output is from the SQL Server database `{}`. You have access to:\n
-- System catalog views (read-only)\n
-- Brent Ozar’s diagnostic procedures: `sp_BlitzFirst`, `sp_BlitzCache`, `sp_BlitzIndex`, `sp_Blitz`, `sp_Who`\n
-- A tool for running SQL SELECT queries to inspect metadata and performance-related views\n
-- A tool for querying a curated knowledge base related to SQL Server performance\n
 
-Your task:\n
-1. Analyze the finding in detail using all available metadata and knowledge.\n
-2. Propose an actionable recommendation to improve SQL Server performance.\n
-3. Use `query_knowledge_base()` and `run_sqlserver_query_as_csv()` tools to gather evidence before final recommendation.\n
+def _load_prompt_for(procedure: str, finding: str, database: str) -> str:
+    """
+    Load a prompt template for a given procedure and populate placeholders.
 
-Your output must:\n
-- Be in Markdown format\n
-- Include a **clear explanation** of the root cause and impact\n
-- Include **specific runnable SQL commands** (in `sql` code blocks), formatted with each clause on its own line\n
-- Provide enough context and justification for a DBA to confidently apply the recommendation
-"""
+    Behavior is driven by the `VERSION` in the `.env` file at project root.
+    VERSION=1 -> use `db/prompts/general_sp_blitz.txt`
+    VERSION=2 -> prefer `db/prompts/{procedure}.txt`, fallback to general
+    """
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# TODO testing
+    version = int(os.getenv("VERSION", '1'))
+
+    prompts_dir = os.path.join(project_root, "db", "prompts")
+    specific_prompt_file = os.path.join(prompts_dir, f"{procedure}.txt")
+    general_prompt_file = os.path.join(project_root, "prompts", "general_sp_blitz.txt")
+
+    template = None
+    if version == 2:
+        # Try procedure-specific prompt first
+        try:
+            if os.path.exists(specific_prompt_file):
+                with open(specific_prompt_file, "r") as f:
+                    template = f.read()
+            elif os.path.exists(general_prompt_file):
+                with open(general_prompt_file, "r") as f:
+                    template = f.read()
+        except Exception:
+            return None
+    if version == 1:
+        # Version 1: use the generic prompt
+        try:
+            if os.path.exists(general_prompt_file):
+                with open(general_prompt_file, "r") as f:
+                    template = f.read()
+        except Exception:
+            return None
+
+    if not template:
+        return None
+
+    return template.format(procedure=procedure, finding=finding, database=database)
+
+
 if __name__ == "__main__":
-
-    ONE_BLITZINDEX_ROW = """
-    redundand index found: [schema].[table].[index] (indexid=1)
-                         """
-    TEST_URL = "https://www.brentozar.com/go/duplicateindex"
-
-    with shelve.open("url_store") as key_value:
-        user_question = INITIAL_USER_QUESTION_TEMPLATE.format(
-            "sp_BlitzIndex",
-            ONE_BLITZINDEX_ROW,
-            TEST_URL,
-            key_value[TEST_URL],
-            os.getenv("MSSQL_DB")
-        )
-        print(user_question)
-
-        result = agent_executor.invoke({
-            "input": user_question,
-            "chat_history": []
-        })
-        print(result["output"])
+    # Quick smoke test
+    ONE_BLITZINDEX_ROW = "redundand index found: [schema].[table].[index] (indexid=1)"
+    user_question = _load_prompt_for(
+        "sp_BlitzIndex",
+        ONE_BLITZINDEX_ROW,
+        os.getenv("MSSQL_DB") or "<unknown_db>"
+    )
+    print(user_question)
