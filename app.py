@@ -454,7 +454,7 @@ def init(display_name):
             if procedure_name == 'sp_BlitzCache' and database_name:
                 cursor.execute(f"EXEC {procedure_name} @DatabaseName = ?", (database_name,))
             elif procedure_name == 'sp_BlitzIndex' and database_name:
-                cursor.execute(f"EXEC {procedure_name} @Mode=4, @DatabaseName = ?", (database_name,))
+                cursor.execute(f"EXEC {procedure_name} @IncludeInactiveIndexes=1, @Mode=4, @DatabaseName = ?", (database_name,))
             else:
                 cursor.execute(f"EXEC {procedure_name}")
 
