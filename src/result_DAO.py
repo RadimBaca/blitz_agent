@@ -2,6 +2,7 @@ from typing import List, Optional, Tuple, Dict, Any, Union
 from .connection_DAO import _ensure_db, _get_conn
 from .models import (
     BlitzRecord, BlitzIndexRecord, BlitzCacheRecord,
+    DBIndexRecord, ChatOverIndexingRecord,
     PROCEDURE_MODELS, PROCEDURE_TABLE_NAMES,
     PROCEDURE_CHAT_TABLE_NAMES, PROCEDURE_ID_FIELDS, COLUMN_MAPPING
 )
@@ -344,5 +345,93 @@ def delete_chat_session_by_record_id(proc_name: str, record_pk_id: int):
             WHERE {id_field} = ?
         """, (record_pk_id,))
         conn.commit()
+    finally:
+        conn.close()
+
+
+def store_db_indexes(indexes_data: List[Dict[str, Any]], pbi_id: int):
+    """Store DB_Indexes data for a specific BlitzIndex record"""
+    _ensure_db()
+    conn = _get_conn()
+    try:
+        # First delete any existing indexes for this pbi_id
+        conn.execute("DELETE FROM DB_Indexes WHERE pbi_id = ?", (pbi_id,))
+
+        # Insert new index records
+        for index_data in indexes_data:
+            # Create and validate the DBIndexRecord model
+            index_record = DBIndexRecord(pbi_id=pbi_id, **index_data)
+
+            # Convert model to dict for database insertion
+            model_dict = index_record.model_dump()
+
+            # Build INSERT statement
+            fields = []
+            values = []
+            for field, value in model_dict.items():
+                if value is not None:  # Only insert non-None values
+                    fields.append(field)
+                    values.append(value)
+
+            if fields:  # Only insert if we have data
+                placeholders = ["?"] * len(fields)
+                sql = f"INSERT INTO DB_Indexes ({', '.join(fields)}) VALUES ({', '.join(placeholders)})"
+                conn.execute(sql, values)
+
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_db_indexes(pbi_id: int) -> List[DBIndexRecord]:
+    """Get all DB_Indexes records for a specific BlitzIndex record"""
+    _ensure_db()
+    conn = _get_conn()
+    try:
+        cur = conn.execute("""
+            SELECT di_id, pbi_id, db_schema_object_indexid, index_definition, secret_columns,
+                   fill_factor, index_usage_summary, index_op_stats, index_size_summary,
+                   partition_compression_detail, index_lock_wait_summary, is_referenced_by_foreign_key,
+                   fks_covered_by_index, last_user_seek, last_user_scan, last_user_lookup,
+                   last_user_update, create_date, modify_date, page_latch_wait_count,
+                   page_latch_wait_time, page_io_latch_wait_count, page_io_latch_wait_time,
+                   create_tsql, drop_tsql
+            FROM DB_Indexes
+            WHERE pbi_id = ?
+            ORDER BY di_id
+        """, (pbi_id,))
+
+        records = []
+        for row in cur.fetchall():
+            record_data = {
+                'di_id': row[0],
+                'pbi_id': row[1],
+                'db_schema_object_indexid': row[2],
+                'index_definition': row[3],
+                'secret_columns': row[4],
+                'fill_factor': row[5],
+                'index_usage_summary': row[6],
+                'index_op_stats': row[7],
+                'index_size_summary': row[8],
+                'partition_compression_detail': row[9],
+                'index_lock_wait_summary': row[10],
+                'is_referenced_by_foreign_key': row[11],
+                'fks_covered_by_index': row[12],
+                'last_user_seek': row[13],
+                'last_user_scan': row[14],
+                'last_user_lookup': row[15],
+                'last_user_update': row[16],
+                'create_date': row[17],
+                'modify_date': row[18],
+                'page_latch_wait_count': row[19],
+                'page_latch_wait_time': row[20],
+                'page_io_latch_wait_count': row[21],
+                'page_io_latch_wait_time': row[22],
+                'create_tsql': row[23],
+                'drop_tsql': row[24]
+            }
+            records.append(DBIndexRecord(**record_data))
+
+        return records
     finally:
         conn.close()

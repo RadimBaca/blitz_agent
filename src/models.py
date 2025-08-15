@@ -26,6 +26,7 @@ class BlitzIndexRecord(BaseModel):
     finding: Optional[str] = None
     details_schema_table_index_indexid: Optional[str] = None
     priority: Optional[int] = None
+    more_info: Optional[str] = None
     raw_record: Optional[str] = None
     procedure_order: int
     pc_id: int
@@ -74,6 +75,38 @@ class ChatRecord(BaseModel):
         from_attributes = True
 
 
+class DBIndexRecord(BaseModel):
+    di_id: Optional[int] = None
+    pbi_id: int
+    db_schema_object_indexid: Optional[str] = None
+    index_definition: Optional[str] = None
+    secret_columns: Optional[str] = None
+    fill_factor: Optional[int] = None
+    index_usage_summary: Optional[str] = None
+    index_op_stats: Optional[str] = None
+    index_size_summary: Optional[str] = None
+    partition_compression_detail: Optional[str] = None
+    index_lock_wait_summary: Optional[str] = None
+    is_referenced_by_foreign_key: Optional[int] = None
+    fks_covered_by_index: Optional[int] = None
+    last_user_seek: Optional[str] = None
+    last_user_scan: Optional[str] = None
+    last_user_lookup: Optional[str] = None
+    last_user_update: Optional[str] = None
+    create_date: Optional[str] = None
+    modify_date: Optional[str] = None
+    page_latch_wait_count: Optional[int] = None
+    page_latch_wait_time: Optional[str] = None
+    page_io_latch_wait_count: Optional[int] = None
+    page_io_latch_wait_time: Optional[str] = None
+    create_tsql: Optional[str] = None
+    drop_tsql: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+
 # Mapping of procedure names to their corresponding models and display keys
 PROCEDURE_MODELS = {
     "sp_Blitz": BlitzRecord,
@@ -117,6 +150,7 @@ COLUMN_MAPPING = {
         "Finding": "finding",
         "Details: schema.table.index(indexid)": "details_schema_table_index_indexid",
         "Priority": "priority",
+        "More Info": "more_info",
         "raw_record": "raw_record",
     },
     "sp_BlitzCache": {

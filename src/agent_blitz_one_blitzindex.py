@@ -150,6 +150,21 @@ def _load_prompt_for(procedure: str, finding: str, database: str) -> str:
     return template.format(procedure=procedure, finding=finding, database=database)
 
 
+def _load_prompt(prompt_name: str) -> str:
+    """Load a prompt template by name from the prompts directory"""
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    prompt_file = os.path.join(project_root, "prompts", f"{prompt_name}.txt")
+
+    try:
+        if os.path.exists(prompt_file):
+            with open(prompt_file, "r") as f:
+                return f.read()
+    except Exception:
+        pass
+
+    return ""
+
+
 if __name__ == "__main__":
     # Quick smoke test
     ONE_BLITZINDEX_ROW = "redundand index found: [schema].[table].[index] (indexid=1)"

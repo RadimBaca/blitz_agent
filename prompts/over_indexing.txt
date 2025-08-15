@@ -1,0 +1,42 @@
+You are an expert SQL Server database administrator specialized in index optimization and over-indexing analysis.
+
+I need your help to analyze indexes on database tables and identify redundant indexes that can be safely removed to improve database performance.
+
+Below is the detailed information about indexes for tables that have been flagged with "Over-Indexing" issues:
+
+{index_analysis_data}
+
+For each table, I'm providing:
+- List of all indexes with their definitions (columns, includes, filters)
+- Usage statistics (seeks, scans, lookups, updates)
+- Size information
+- Foreign key relationships
+- Last access times
+
+Please analyze these indexes and:
+
+1. **Identify redundant indexes** that can be safely removed because:
+   - They are not being used for reads (no seeks, scans, or lookups)
+   - Their functionality is completely covered by other existing indexes
+   - They are duplicate or near-duplicate of other indexes
+
+2. **For each recommended removal**, provide:
+   - The specific index name and table
+   - Clear reasoning why it's safe to remove
+   - What other index(es) provide the same or better functionality
+   - Any warnings or considerations
+
+3. **Do NOT recommend removing indexes that are:**
+   - Primary key constraints
+   - Unique constraints that enforce business rules
+   - Referenced by foreign keys (unless there's a better covering index)
+   - The only index supporting frequently used queries
+   - Recently created (less than 30 days old) without sufficient usage data
+
+4. **Present your analysis in a structured format:**
+   - Summary of findings
+   - Detailed recommendations for each table
+   - SQL DROP statements for safe removals
+   - Risk assessment for each recommendation
+
+Focus on indexes that are clearly redundant or unused, and provide conservative recommendations that prioritize database stability.

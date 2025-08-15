@@ -37,6 +37,7 @@ CREATE TABLE Procedure_blitzindex (
   finding TEXT,
   details_schema_table_index_indexid TEXT,
   priority INTEGER,
+  more_info TEXT,
   raw_record TEXT
 );
 
@@ -78,6 +79,36 @@ CREATE TABLE Chat_blitzcache (
   chat_order INTEGER,
   pbc_id INTEGER NOT NULL REFERENCES Procedure_blitzcache (pbc_id)
 );
+
+-- New table for storing index information from Q1 queries
+CREATE TABLE DB_Indexes (
+  di_id INTEGER PRIMARY KEY,
+  pbi_id INTEGER NOT NULL REFERENCES Procedure_blitzindex (pbi_id),
+  db_schema_object_indexid TEXT,
+  index_definition TEXT,
+  secret_columns TEXT,
+  fill_factor INTEGER,
+  index_usage_summary TEXT,
+  index_op_stats TEXT,
+  index_size_summary TEXT,
+  partition_compression_detail TEXT,
+  index_lock_wait_summary TEXT,
+  is_referenced_by_foreign_key INTEGER,
+  fks_covered_by_index INTEGER,
+  last_user_seek TEXT,
+  last_user_scan TEXT,
+  last_user_lookup TEXT,
+  last_user_update TEXT,
+  create_date TEXT,
+  modify_date TEXT,
+  page_latch_wait_count INTEGER,
+  page_latch_wait_time TEXT,
+  page_io_latch_wait_count INTEGER,
+  page_io_latch_wait_time TEXT,
+  create_tsql TEXT,
+  drop_tsql TEXT
+);
+
 
 INSERT INTO Procedure_type VALUES (1, 'Blitz', 'sp_Blitz'),
                                  (2, 'Blitz Index', 'sp_BlitzIndex'),
