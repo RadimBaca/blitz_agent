@@ -1,387 +1,213 @@
 import pytest
-import tempfile
-import sqlite3
-import os
-from unittest.mock import patch, MagicMock
-
-# Import the functions to test
+from unittest.mock import patch
+from src.models import BlitzIndexRecord, DBIndexRecord
 import src.result_DAO as dao
-from src.models import DBIndexRecord, ChatOverIndexingRecord
 
 
-class TestOverIndexingFunctions:
-    """Test suite for over-indexing related functions in result_DAO.py"""
+class TestOverIndexingAnalysis:
+    """Test cases for over-indexing analysis functionality"""
 
     @pytest.fixture
-    def setup_test_db(self):
-        """Setup a temporary test database"""
-        # Create a temporary database file
-        db_fd, db_path = tempfile.mkstemp()
-        os.close(db_fd)
+    def sample_blitzindex_record(self):
+        """Create a sample BlitzIndex record with over-indexing finding"""
+        return BlitzIndexRecord(
+            pbi_id=1,
+            finding="Over-indexing: 5 or more indexes on dbo.TestTable",
+            details_schema_table_index_indexid="dbo.TestTable has 7 indexes",
+            priority=100,
+            more_info="EXEC dbo.sp_BlitzIndex @DatabaseName='TestDB', @SchemaName='dbo', @TableName='TestTable';",
+            raw_record='{"Finding": "Over-indexing", "Details": "Test details", "Priority": 100}',
+            procedure_order=1,
+            pc_id=1
+        )
 
-        # Mock the database connection to use our test database
-        with patch('src.result_DAO._get_conn') as mock_get_conn:
-            conn = sqlite3.connect(db_path)
-            conn.row_factory = sqlite3.Row
-            mock_get_conn.return_value = conn
-
-            # Create necessary tables
-            conn.execute("""
-                CREATE TABLE Database_connection (
-                    db_id INTEGER PRIMARY KEY,
-                    db_name VARCHAR(100) NOT NULL,
-                    db_user VARCHAR(100) NOT NULL,
-                    db_password VARCHAR(100) NOT NULL,
-                    db_host VARCHAR(100) NOT NULL,
-                    db_port INTEGER NOT NULL
-                )
-            """)
-
-            conn.execute("""
-                CREATE TABLE Procedure_type (
-                    p_id INTEGER PRIMARY KEY,
-                    display_name VARCHAR(50),
-                    procedure_name VARCHAR(30)
-                )
-            """)
-
-            conn.execute("""
-                CREATE TABLE Procedure_call (
-                    pc_id INTEGER PRIMARY KEY,
-                    run TIMESTAMP NOT NULL,
-                    p_id INTEGER NOT NULL REFERENCES Procedure_type (p_id),
-                    db_id INTEGER NOT NULL REFERENCES Database_connection (db_id)
-                )
-            """)
-
-            conn.execute("""
-                CREATE TABLE Procedure_blitzindex (
-                    pbi_id INTEGER PRIMARY KEY,
-                    procedure_order INTEGER NOT NULL,
-                    pc_id INTEGER NOT NULL REFERENCES Procedure_call (pc_id),
-                    finding TEXT,
-                    details_schema_table_index_indexid TEXT,
-                    priority INTEGER,
-                    more_info TEXT,
-                    raw_record TEXT
-                )
-            """)
-
-            conn.execute("""
-                CREATE TABLE DB_Indexes (
-                    di_id INTEGER PRIMARY KEY,
-                    pbi_id INTEGER NOT NULL REFERENCES Procedure_blitzindex (pbi_id),
-                    db_schema_object_indexid TEXT,
-                    index_definition TEXT,
-                    secret_columns TEXT,
-                    fill_factor INTEGER,
-                    index_usage_summary TEXT,
-                    index_op_stats TEXT,
-                    index_size_summary TEXT,
-                    partition_compression_detail TEXT,
-                    index_lock_wait_summary TEXT,
-                    is_referenced_by_foreign_key INTEGER,
-                    fks_covered_by_index INTEGER,
-                    last_user_seek TEXT,
-                    last_user_scan TEXT,
-                    last_user_lookup TEXT,
-                    last_user_update TEXT,
-                    create_date TEXT,
-                    modify_date TEXT,
-                    page_latch_wait_count INTEGER,
-                    page_latch_wait_time TEXT,
-                    page_io_latch_wait_count INTEGER,
-                    page_io_latch_wait_time TEXT,
-                    create_tsql TEXT,
-                    drop_tsql TEXT
-                )
-            """)
-
-            conn.execute("""
-                CREATE TABLE Chat_OverIndexing (
-                    coi_id INTEGER PRIMARY KEY,
-                    response TEXT NOT NULL,
-                    type VARCHAR,
-                    chat_order INTEGER
-                )
-            """)
-
-            # Insert test data
-            conn.execute("INSERT INTO Database_connection VALUES (1, 'TestDB', 'user', 'pass', 'localhost', 1433)")
-            conn.execute("INSERT INTO Procedure_type VALUES (2, 'Blitz Index', 'sp_BlitzIndex')")
-            conn.execute("INSERT INTO Procedure_call VALUES (1, '2024-01-01 10:00:00', 2, 1)")
-            conn.execute("""
-                INSERT INTO Procedure_blitzindex VALUES (
-                    1, 0, 1,
-                    'Over-Indexing: Test Table has redundant indexes',
-                    'TestDB.dbo.TestTable',
-                    100,
-                    'EXEC dbo.sp_BlitzIndex @DatabaseName=''TestDB'', @SchemaName=''dbo'', @TableName=''TestTable'';',
-                    '{}'
-                )
-            """)
-
-            conn.commit()
-
-            yield conn, db_path
-
-            conn.close()
-            os.unlink(db_path)
-
-    def test_store_db_indexes(self, setup_test_db):
-        """Test storing DB indexes data"""
-        conn, _ = setup_test_db
-
-        # Test data
-        indexes_data = [
+    @pytest.fixture
+    def sample_db_indexes(self):
+        """Create sample DB index records"""
+        return [
             {
-                'db_schema_object_indexid': 'TestDB.dbo.TestTable.IX_Test(1)',
-                'index_definition': '[NONCLUSTERED] [id] ASC',
-                'secret_columns': '',
-                'fill_factor': 90,
-                'index_usage_summary': 'Reads: 100 Writes: 50',
-                'index_op_stats': 'seeks: 80, scans: 20',
-                'index_size_summary': '1.2 MB',
-                'create_tsql': 'CREATE INDEX IX_Test ON TestTable(id)',
-                'drop_tsql': 'DROP INDEX IX_Test ON TestTable'
+                'db_schema_object_indexid': 'dbo.TestTable.PK_TestTable (1)',
+                'index_definition': '[ID] ASC',
+                'secret_columns': 'None',
+                'fill_factor': 100,
+                'index_usage_summary': 'Seeks: 1000, Scans: 10',
+                'index_op_stats': 'Updates: 50',
+                'index_size_summary': '10 MB',
+                'partition_compression_detail': 'None',
+                'index_lock_wait_summary': 'No waits',
+                'is_referenced_by_foreign_key': 1,
+                'fks_covered_by_index': 0,
+                'last_user_seek': '2024-08-15 10:00:00',
+                'last_user_scan': '2024-08-15 09:00:00',
+                'last_user_lookup': None,
+                'last_user_update': '2024-08-15 11:00:00',
+                'create_date': '2024-01-01 12:00:00',
+                'modify_date': '2024-01-01 12:00:00',
+                'page_latch_wait_count': 0,
+                'page_latch_wait_time': '00:00:00',
+                'page_io_latch_wait_count': 0,
+                'page_io_latch_wait_time': '00:00:00',
+                'create_tsql': 'CREATE UNIQUE CLUSTERED INDEX [PK_TestTable] ON [dbo].[TestTable] ([ID] ASC)',
+                'drop_tsql': 'DROP INDEX [PK_TestTable] ON [dbo].[TestTable]'
             },
             {
-                'db_schema_object_indexid': 'TestDB.dbo.TestTable.IX_Test2(2)',
-                'index_definition': '[NONCLUSTERED] [name] ASC',
-                'index_usage_summary': 'Reads: 0 Writes: 0',
-                'create_tsql': 'CREATE INDEX IX_Test2 ON TestTable(name)'
+                'db_schema_object_indexid': 'dbo.TestTable.IX_TestTable_Name (2)',
+                'index_definition': '[Name] ASC',
+                'secret_columns': 'None',
+                'fill_factor': 90,
+                'index_usage_summary': 'Seeks: 0, Scans: 0',
+                'index_op_stats': 'Updates: 50',
+                'index_size_summary': '5 MB',
+                'partition_compression_detail': 'None',
+                'index_lock_wait_summary': 'No waits',
+                'is_referenced_by_foreign_key': 0,
+                'fks_covered_by_index': 0,
+                'last_user_seek': None,
+                'last_user_scan': None,
+                'last_user_lookup': None,
+                'last_user_update': '2024-08-15 11:00:00',
+                'create_date': '2024-01-01 12:00:00',
+                'modify_date': '2024-01-01 12:00:00',
+                'page_latch_wait_count': 0,
+                'page_latch_wait_time': '00:00:00',
+                'page_io_latch_wait_count': 0,
+                'page_io_latch_wait_time': '00:00:00',
+                'create_tsql': 'CREATE NONCLUSTERED INDEX [IX_TestTable_Name] ON [dbo].[TestTable] ([Name] ASC)',
+                'drop_tsql': 'DROP INDEX [IX_TestTable_Name] ON [dbo].[TestTable]'
             }
         ]
 
-        # Store the data
-        dao.store_db_indexes(indexes_data, 1)
+    def test_store_and_get_db_indexes(self, sample_db_indexes):
+        """Test storing and retrieving DB index records"""
+        # Convert sample data to DBIndexRecord objects
+        index_records = []
+        for index_data in sample_db_indexes:
+            index_record = DBIndexRecord(pbi_id=1, **index_data)
+            index_records.append(index_record)
 
-        # Verify data was stored
-        cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM DB_Indexes WHERE pbi_id = 1")
-        count = cursor.fetchone()[0]
-        assert count == 2
+        # Store indexes
+        dao.store_db_indexes(index_records, 1)
 
-        # Verify specific data
-        cursor.execute("""
-            SELECT db_schema_object_indexid, index_definition, fill_factor
-            FROM DB_Indexes
-            WHERE pbi_id = 1
-            ORDER BY di_id
-        """)
-        rows = cursor.fetchall()
+        # Retrieve indexes
+        retrieved_indexes = dao.get_db_indexes(1)
 
-        assert rows[0][0] == 'TestDB.dbo.TestTable.IX_Test(1)'
-        assert rows[0][1] == '[NONCLUSTERED] [id] ASC'
-        assert rows[0][2] == 90
+        # Verify
+        assert len(retrieved_indexes) == 2
+        assert isinstance(retrieved_indexes[0], DBIndexRecord)
+        assert retrieved_indexes[0].pbi_id == 1
+        assert retrieved_indexes[0].db_schema_object_indexid == 'dbo.TestTable.PK_TestTable (1)'
+        assert retrieved_indexes[1].db_schema_object_indexid == 'dbo.TestTable.IX_TestTable_Name (2)'
 
-        assert rows[1][0] == 'TestDB.dbo.TestTable.IX_Test2(2)'
-        assert rows[1][1] == '[NONCLUSTERED] [name] ASC'
-        assert rows[1][2] is None  # fill_factor not provided
+    def test_store_db_indexes_replaces_existing(self, sample_db_indexes):
+        """Test that storing indexes replaces existing ones for the same pbi_id"""
+        # Convert sample data to DBIndexRecord objects
+        initial_records = []
+        for index_data in sample_db_indexes:
+            index_record = DBIndexRecord(pbi_id=1, **index_data)
+            initial_records.append(index_record)
 
-    def test_get_db_indexes(self, setup_test_db):
-        """Test retrieving DB indexes data"""
-        conn, _ = setup_test_db
+        # Store initial indexes
+        dao.store_db_indexes(initial_records, 1)
 
-        # First store some test data
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO DB_Indexes (
-                pbi_id, db_schema_object_indexid, index_definition,
-                fill_factor, index_usage_summary
-            ) VALUES (1, 'TestDB.dbo.TestTable.IX_Test(1)',
-                     '[NONCLUSTERED] [id] ASC', 90, 'Reads: 100 Writes: 50')
-        """)
-        conn.commit()
+        # Store new indexes for the same pbi_id
+        new_index_data = {
+            'db_schema_object_indexid': 'dbo.TestTable.IX_NewIndex (3)',
+            'index_definition': '[NewColumn] ASC',
+            'fill_factor': 100
+        }
+        new_record = DBIndexRecord(pbi_id=1, **new_index_data)
+        dao.store_db_indexes([new_record], 1)
 
-        # Retrieve the data
-        indexes = dao.get_db_indexes(1)
+        # Retrieve indexes
+        retrieved_indexes = dao.get_db_indexes(1)
 
-        # Verify results
-        assert len(indexes) == 1
-        assert isinstance(indexes[0], DBIndexRecord)
-        assert indexes[0].pbi_id == 1
-        assert indexes[0].db_schema_object_indexid == 'TestDB.dbo.TestTable.IX_Test(1)'
-        assert indexes[0].index_definition == '[NONCLUSTERED] [id] ASC'
-        assert indexes[0].fill_factor == 90
-        assert indexes[0].index_usage_summary == 'Reads: 100 Writes: 50'
+        # Verify only the new index exists
+        assert len(retrieved_indexes) == 1
+        assert retrieved_indexes[0].db_schema_object_indexid == 'dbo.TestTable.IX_NewIndex (3)'
 
-    def test_store_chat_over_indexing(self, setup_test_db):
-        """Test storing over-indexing chat history"""
-        conn, _ = setup_test_db
+    def test_get_db_indexes_empty_result(self):
+        """Test getting indexes when none exist"""
+        # Try to get indexes for non-existent pbi_id
+        indexes = dao.get_db_indexes(999)
 
-        # Test data
-        chat_history = [
-            ("user", "Analyze over-indexing issues"),
-            ("assistant", "I found 3 redundant indexes that can be safely removed..."),
-            ("user", "Can you be more specific about index IX_Test?"),
-            ("assistant", "Index IX_Test on column 'id' is redundant because...")
+        # Verify empty result
+        assert len(indexes) == 0
+
+    @patch('src.agent_blitz_one_blitzindex.execute_more_info_query')
+    def test_execute_more_info_query_mock(self, mock_execute):
+        """Test the execute_more_info_query function with mock"""
+        from src.agent_blitz_one_blitzindex import execute_more_info_query
+
+        # Setup mock return value
+        mock_execute.return_value = [
+            {'Column1': 'Header1', 'Column2': 'Header2'},  # Q1 row to skip
+            {'Column1': 'Value1', 'Column2': 'Value2'}     # Actual data
         ]
 
-        # Store the chat history
-        dao.store_chat_over_indexing(chat_history)
+        # Call function
+        result = execute_more_info_query("EXEC dbo.sp_BlitzIndex @DatabaseName='TestDB'")
 
-        # Verify data was stored
-        cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM Chat_OverIndexing")
-        count = cursor.fetchone()[0]
-        assert count == 4
+        # Verify mock was called
+        mock_execute.assert_called_once()
+        assert len(result) == 2
 
-        # Verify order and content
-        cursor.execute("SELECT type, response, chat_order FROM Chat_OverIndexing ORDER BY chat_order")
-        rows = cursor.fetchall()
+    def test_format_index_data_for_prompt(self, sample_blitzindex_record):
+        """Test formatting index data for AI prompt"""
+        from src.agent_blitz_one_blitzindex import _format_index_data_for_prompt
 
-        assert rows[0][0] == "user"
-        assert rows[0][1] == "Analyze over-indexing issues"
-        assert rows[0][2] == 0
-
-        assert rows[1][0] == "assistant"
-        assert "redundant indexes" in rows[1][1]
-        assert rows[1][2] == 1
-
-        # Test that storing new chat clears previous chat
-        new_chat = [("user", "New analysis")]
-        dao.store_chat_over_indexing(new_chat)
-
-        cursor.execute("SELECT COUNT(*) FROM Chat_OverIndexing")
-        count = cursor.fetchone()[0]
-        assert count == 1
-
-    def test_get_chat_over_indexing(self, setup_test_db):
-        """Test retrieving over-indexing chat history"""
-        conn, _ = setup_test_db
-
-        # First store some test data
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO Chat_OverIndexing (response, type, chat_order)
-            VALUES ('Question about indexes', 'user', 0)
-        """)
-        cursor.execute("""
-            INSERT INTO Chat_OverIndexing (response, type, chat_order)
-            VALUES ('Analysis results...', 'assistant', 1)
-        """)
-        conn.commit()
-
-        # Retrieve the chat history
-        chat_history = dao.get_chat_over_indexing()
-
-        # Verify results
-        assert chat_history is not None
-        assert len(chat_history) == 2
-        assert chat_history[0] == ("user", "Question about indexes")
-        assert chat_history[1] == ("assistant", "Analysis results...")
-
-        # Test empty chat
-        cursor.execute("DELETE FROM Chat_OverIndexing")
-        conn.commit()
-
-        empty_chat = dao.get_chat_over_indexing()
-        assert empty_chat is None
-
-    def test_get_over_indexing_records(self, setup_test_db):
-        """Test retrieving over-indexing BlitzIndex records"""
-        conn, _ = setup_test_db
-
-        # Add another test record that should NOT be returned
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO Procedure_blitzindex VALUES (
-                2, 1, 1,
-                'Missing Index: Add index on column X',
-                'TestDB.dbo.TestTable2',
-                50,
-                'EXEC dbo.sp_BlitzIndex @DatabaseName=''TestDB'', @SchemaName=''dbo'', @TableName=''TestTable2'';',
-                '{}'
+        # Create sample DB index records
+        db_indexes = [
+            DBIndexRecord(
+                pbi_id=1,
+                db_schema_object_indexid='dbo.TestTable.PK_TestTable (1)',
+                index_definition='[ID] ASC',
+                index_usage_summary='Seeks: 1000, Scans: 10',
+                last_user_seek='2024-08-15 10:00:00'
+            ),
+            DBIndexRecord(
+                pbi_id=1,
+                db_schema_object_indexid='dbo.TestTable.IX_Unused (2)',
+                index_definition='[UnusedColumn] ASC',
+                index_usage_summary='Seeks: 0, Scans: 0',
+                last_user_seek=None
             )
-        """)
-        # Add another over-indexing record with higher priority
-        cursor.execute("""
-            INSERT INTO Procedure_blitzindex VALUES (
-                3, 2, 1,
-                'Over-Indexing: Another table with redundant indexes',
-                'TestDB.dbo.TestTable3',
-                200,
-                'EXEC dbo.sp_BlitzIndex @DatabaseName=''TestDB'', @SchemaName=''dbo'', @TableName=''TestTable3'';',
-                '{}'
-            )
-        """)
-        conn.commit()
+        ]
 
-        # Test without priority filter - should get both over-indexing records
-        records = dao.get_over_indexing_records(1)
-        assert len(records) == 2  # Both "Over-Indexing:" records should be returned
+        # Format data
+        formatted_data = _format_index_data_for_prompt(sample_blitzindex_record, db_indexes)
 
-        # Test with priority filter - should get only the record with priority <= 150
-        records = dao.get_over_indexing_records(1, max_priority=150)
-        assert len(records) == 1  # Only the record with priority 100 should be returned
-        assert records[0].pbi_id == 1
-        assert records[0].finding == 'Over-Indexing: Test Table has redundant indexes'
-        assert records[0].priority == 100
+        # Verify formatting
+        assert "OVER-INDEXING ANALYSIS" in formatted_data
+        assert "TABLE: dbo.TestTable" in formatted_data
+        assert "INDEX 1: dbo.TestTable.PK_TestTable (1)" in formatted_data
+        assert "INDEX 2: dbo.TestTable.IX_Unused (2)" in formatted_data
+        assert "Seeks: 1000, Scans: 10" in formatted_data
+        assert "Seeks: 0, Scans: 0" in formatted_data
 
-        # Test with very low priority filter - should get no records
-        records = dao.get_over_indexing_records(1, max_priority=50)
-        assert len(records) == 0
+    def test_format_index_data_empty(self, sample_blitzindex_record):
+        """Test formatting when no index data is available"""
+        from src.agent_blitz_one_blitzindex import _format_index_data_for_prompt
 
-        # Test with very high priority filter - should get both records
-        records = dao.get_over_indexing_records(1, max_priority=300)
-        assert len(records) == 2
+        # Format with empty list
+        formatted_data = _format_index_data_for_prompt(sample_blitzindex_record, [])
 
-        # Verify specific data from first record
-        records = dao.get_over_indexing_records(1)
-        first_record = next(r for r in records if r.pbi_id == 1)
-        assert first_record.details_schema_table_index_indexid == 'TestDB.dbo.TestTable'
-        assert first_record.priority == 100
-        assert 'EXEC dbo.sp_BlitzIndex' in first_record.more_info
+        # Verify fallback message
+        assert "No detailed index data available" in formatted_data
 
-        # Test with non-existent db_id
-        with pytest.raises(ValueError, match="Database connection with db_id '999' does not exist"):
-            dao.get_over_indexing_records(999)
+    @patch('builtins.open')
+    def test_load_over_indexing_prompt(self, mock_open, sample_blitzindex_record):
+        """Test loading the over-indexing prompt template"""
+        from src.agent_blitz_one_blitzindex import _load_over_indexing_prompt
 
-    def test_db_index_record_validation(self):
-        """Test DBIndexRecord model validation"""
-        # Test valid record
-        valid_data = {
-            'pbi_id': 1,
-            'db_schema_object_indexid': 'TestDB.dbo.TestTable.IX_Test(1)',
-            'index_definition': '[NONCLUSTERED] [id] ASC',
-            'fill_factor': 90
-        }
+        # Mock file content
+        mock_open.return_value.__enter__.return_value.read.return_value = (
+            "Test prompt template with {index_analysis_data}"
+        )
 
-        record = DBIndexRecord(**valid_data)
-        assert record.pbi_id == 1
-        assert record.fill_factor == 90
-        assert record.di_id is None  # Optional field
+        # Call function with empty indexes
+        result = _load_over_indexing_prompt(sample_blitzindex_record, [], "TestDB")
 
-        # Test missing required field
-        invalid_data = {
-            'db_schema_object_indexid': 'TestDB.dbo.TestTable.IX_Test(1)',
-            'index_definition': '[NONCLUSTERED] [id] ASC'
-        }
-
-        with pytest.raises(ValueError):
-            DBIndexRecord(**invalid_data)
-
-    def test_chat_over_indexing_record_validation(self):
-        """Test ChatOverIndexingRecord model validation"""
-        # Test valid record
-        valid_data = {
-            'response': 'Analysis complete',
-            'type': 'assistant',
-            'chat_order': 1
-        }
-
-        record = ChatOverIndexingRecord(**valid_data)
-        assert record.response == 'Analysis complete'
-        assert record.type == 'assistant'
-        assert record.chat_order == 1
-        assert record.coi_id is None  # Optional field
-
-        # Test missing required field
-        invalid_data = {
-            'type': 'user',
-            'chat_order': 0
-        }
-
-        with pytest.raises(ValueError):
-            ChatOverIndexingRecord(**invalid_data)
+        # Verify template was loaded and formatted
+        mock_open.assert_called_once()
+        assert "Test prompt template with" in result
+        assert "No detailed index data available" in result

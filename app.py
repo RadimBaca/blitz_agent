@@ -14,6 +14,7 @@ import src.agent_blitz_one_blitzindex as blitz_agent
 import src.result_DAO as dao
 import src.db_DAO as db_dao
 import src.db_connection as db_conn
+from src.models import DBIndexRecord
 
 
 connections = db_dao.get_all_db_connections()
@@ -501,12 +502,111 @@ def analyze(display_name, rec_id):
 
         chat_history = dao.get_chat_history(procedure_name, rec_id)
         if not chat_history:
-            # Use the raw_record from the database for the agent prompt
-            raw_record_data = json.loads(record.raw_record) if record.raw_record else {}
+            # Special handling for Over-Indexing BlitzIndex records
+            print(f"Procedure name: {procedure_name}, record.finding: {record.finding}")
+            if (procedure_name == "sp_BlitzIndex" and
+                record.finding and record.finding.startswith("Over-Indexing")):
 
-            user_question = blitz_agent._load_prompt_for(
-                get_procedure_name(display_name), raw_record_data, db_conn.get_actual_db_name()
-            )
+                # Execute the more_info SQL command to get detailed index information
+                if record.more_info:
+                    try:
+                        # Execute the SQL command directly using database connection
+                        with db_conn.get_connection() as db_connection:
+                            cursor = db_connection.cursor()
+                            cursor.execute(record.more_info)
+
+                            # Skip to the result set with index data
+                            while cursor.description is None:
+                                if not cursor.nextset():
+                                    break
+
+                            if cursor.description:
+                                columns = [desc[0] for desc in cursor.description]
+                                rows = cursor.fetchall()
+
+                                # Convert rows to list of DBIndexRecord objects and skip first row (Q1)
+                                index_records = []
+                                for i, row in enumerate(rows):
+                                    if i == 0:  # Skip first row (Q1)
+                                        continue
+                                    row_dict = dict(zip(columns, row))
+                                    # Serialize the data for storage
+                                    serialized_row = safe_pretty_json(row_dict)
+
+                                    # Map sp_BlitzIndex columns to DBIndexRecord fields
+                                    mapped_data = {}
+
+                                    # Map the columns from sp_BlitzIndex to DBIndexRecord fields
+                                    column_mapping = {
+                                        'Details: db_schema.table.index(indexid)': 'db_schema_object_indexid',
+                                        'Definition: [Property] ColumnName {datatype maxbytes}': 'index_definition',
+                                        'Secret Columns': 'secret_columns',
+                                        'Fillfactor': 'fill_factor',
+                                        'Usage Stats': 'index_usage_summary',
+                                        'Op Stats': 'index_op_stats',
+                                        'Size': 'index_size_summary',
+                                        'Compression Type': 'partition_compression_detail',
+                                        'Lock Waits': 'index_lock_wait_summary',
+                                        'Referenced by FK?': 'is_referenced_by_foreign_key',
+                                        'FK Covered by Index?': 'fks_covered_by_index',
+                                        'Last User Seek': 'last_user_seek',
+                                        'Last User Scan': 'last_user_scan',
+                                        'Last User Lookup': 'last_user_lookup',
+                                        'Last User Write': 'last_user_update',
+                                        'Created': 'create_date',
+                                        'Last Modified': 'modify_date',
+                                        'Page Latch Wait Count': 'page_latch_wait_count',
+                                        'Page Latch Wait Time (D:H:M:S)': 'page_latch_wait_time',
+                                        'Page IO Latch Wait Count': 'page_io_latch_wait_count',
+                                        'Page IO Latch Wait Time (D:H:M:S)': 'page_io_latch_wait_time',
+                                        'Create TSQL': 'create_tsql',
+                                        'Drop TSQL': 'drop_tsql'
+                                    }
+
+                                    for sp_column, db_field in column_mapping.items():
+                                        if sp_column in serialized_row:
+                                            value = serialized_row[sp_column]
+                                            # Convert boolean strings to integers for FK fields
+                                            if db_field == 'is_referenced_by_foreign_key' and isinstance(value, str):
+                                                mapped_data[db_field] = 1 if value.lower() == 'true' else 0
+                                            else:
+                                                mapped_data[db_field] = value
+
+                                    # Create DBIndexRecord object with mapped data
+                                    index_record = DBIndexRecord(pbi_id=record.pbi_id, **mapped_data)
+                                    index_records.append(index_record)
+
+                                # Store the detailed index data
+                                if index_records:
+                                    dao.store_db_indexes(index_records, record.pbi_id)
+
+                        # Get the stored index data for analysis
+                        db_indexes = dao.get_db_indexes(record.pbi_id)
+
+                        # Load the over-indexing specific prompt
+                        user_question = blitz_agent._load_over_indexing_prompt(
+                            record, db_indexes, db_conn.get_actual_db_name()
+                        )
+                    except (pyodbc.Error, ValueError, KeyError) as e:
+                        print(f"Error processing over-indexing analysis: {e}")
+                        # Fallback to standard analysis
+                        raw_record_data = json.loads(record.raw_record) if record.raw_record else {}
+                        user_question = blitz_agent._load_prompt_for(
+                            procedure_name, raw_record_data, db_conn.get_actual_db_name()
+                        )
+                else:
+                    # No more_info available, use standard analysis
+                    raw_record_data = json.loads(record.raw_record) if record.raw_record else {}
+                    user_question = blitz_agent._load_prompt_for(
+                        procedure_name, raw_record_data, db_conn.get_actual_db_name()
+                    )
+            else:
+                # Standard analysis for other types
+                raw_record_data = json.loads(record.raw_record) if record.raw_record else {}
+                user_question = blitz_agent._load_prompt_for(
+                    procedure_name, raw_record_data, db_conn.get_actual_db_name()
+                )
+
             print(f"Initial user question: {user_question}")
             # For display purposes, show the formatted record data
             record_dict = record.model_dump()

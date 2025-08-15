@@ -2,7 +2,7 @@ from typing import List, Optional, Tuple, Dict, Any, Union
 from .connection_DAO import _ensure_db, _get_conn
 from .models import (
     BlitzRecord, BlitzIndexRecord, BlitzCacheRecord,
-    DBIndexRecord, ChatOverIndexingRecord,
+    DBIndexRecord,
     PROCEDURE_MODELS, PROCEDURE_TABLE_NAMES,
     PROCEDURE_CHAT_TABLE_NAMES, PROCEDURE_ID_FIELDS, COLUMN_MAPPING
 )
@@ -349,7 +349,7 @@ def delete_chat_session_by_record_id(proc_name: str, record_pk_id: int):
         conn.close()
 
 
-def store_db_indexes(indexes_data: List[Dict[str, Any]], pbi_id: int):
+def store_db_indexes(indexes_data: List[DBIndexRecord], pbi_id: int):
     """Store DB_Indexes data for a specific BlitzIndex record"""
     _ensure_db()
     conn = _get_conn()
@@ -358,9 +358,9 @@ def store_db_indexes(indexes_data: List[Dict[str, Any]], pbi_id: int):
         conn.execute("DELETE FROM DB_Indexes WHERE pbi_id = ?", (pbi_id,))
 
         # Insert new index records
-        for index_data in indexes_data:
-            # Create and validate the DBIndexRecord model
-            index_record = DBIndexRecord(pbi_id=pbi_id, **index_data)
+        for index_record in indexes_data:
+            # Ensure pbi_id is set correctly
+            index_record.pbi_id = pbi_id
 
             # Convert model to dict for database insertion
             model_dict = index_record.model_dump()
