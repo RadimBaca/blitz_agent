@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Dict, Any
 import os
 import io
 import csv
@@ -15,6 +15,7 @@ from langchain_community.vectorstores import Chroma
 
 # Import the centralized connection function
 from .db_connection import get_connection
+from .models import DBIndexRecord
 
 # Always resolve vector store relative to project root, not src/
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -148,6 +149,113 @@ def _load_prompt_for(procedure: str, finding: str, database: str) -> str:
         return None
 
     return template.format(procedure=procedure, finding=finding, database=database)
+
+
+def execute_more_info_query(more_info_sql: str) -> List[Dict[str, Any]]:
+    """
+    Execute the more_info SQL command from BlitzIndex to get detailed index information.
+    Returns a list of dictionaries representing the query results.
+    """
+    try:
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(more_info_sql)
+
+            # Get column names
+            columns = [column[0] for column in cursor.description] if cursor.description else []
+
+            # Fetch all rows
+            rows = cursor.fetchall()
+
+            # Convert to list of dictionaries
+            result = []
+            for row in rows:
+                row_dict = {}
+                for i, value in enumerate(row):
+                    if i < len(columns):
+                        row_dict[columns[i]] = value
+                result.append(row_dict)
+
+            return result
+    except pyodbc.Error as e:
+        print(f"Error executing more_info query: {e}")
+        return []
+
+
+def _load_over_indexing_prompt(record, db_indexes: List[DBIndexRecord], database: str) -> str:
+    """
+    Load the over-indexing specific prompt template and populate it with index data.
+    """
+    # Reuse the project_root from module level
+    prompt_file = os.path.join(project_root, "prompts", "over_indexing.txt")
+
+    try:
+        with open(prompt_file, "r", encoding="utf-8") as f:
+            template = f.read()
+    except (IOError, OSError) as e:
+        print(f"Error loading over-indexing prompt: {e}")
+        return f"Analyze over-indexing issue for {record.finding} in database {database}"
+
+    # Format the index data for the prompt
+    index_analysis_data = _format_index_data_for_prompt(record, db_indexes)
+
+    return template.format(index_analysis_data=index_analysis_data)
+
+
+def _format_index_data_for_prompt(record, db_indexes: List[DBIndexRecord]) -> str:
+    """
+    Format the index data into a readable structure for the AI prompt.
+    Focus on relevant attributes for over-indexing analysis:
+    - List of all indexes with their definitions (columns, includes, filters)
+    - Usage statistics (seeks, scans, lookups, updates)
+    - Size information
+    - Foreign key relationships
+    - Last access times
+    """
+    if not db_indexes:
+        return f"No detailed index data available for {record.finding}"
+
+    # Format the data directly from db_indexes
+    formatted_data = []
+    formatted_data.append(f"OVER-INDEXING ANALYSIS for: {record.finding}")
+    formatted_data.append(f"Details: {record.details_schema_table_index_indexid}")
+    formatted_data.append("")
+    formatted_data.append("INDEX ANALYSIS DATA:")
+    formatted_data.append("=" * 50)
+
+    for i, index in enumerate(db_indexes, 1):
+        formatted_data.append(f"\nINDEX {i}: {index.db_schema_object_indexid}")
+
+        # Index definitions (columns, includes, filters)
+        formatted_data.append(f"Definition: {index.index_definition or 'N/A'}")
+        formatted_data.append(f"Secret Columns: {index.secret_columns or 'N/A'}")
+
+        # Usage statistics (seeks, scans, lookups, updates)
+        formatted_data.append(f"Usage Summary: {index.index_usage_summary or 'N/A'}")
+        formatted_data.append(f"Operation Stats: {index.index_op_stats or 'N/A'}")
+
+        # Size information
+        formatted_data.append(f"Size Summary: {index.index_size_summary or 'N/A'}")
+
+        # Foreign key relationships
+        formatted_data.append(f"Referenced by FK: {'Yes' if index.is_referenced_by_foreign_key else 'No'}")
+        formatted_data.append(f"FK Coverage: {index.fks_covered_by_index or 'N/A'}")
+
+        # Last access times
+        formatted_data.append(f"Last User Seek: {index.last_user_seek or 'Never'}")
+        formatted_data.append(f"Last User Scan: {index.last_user_scan or 'Never'}")
+        formatted_data.append(f"Last User Lookup: {index.last_user_lookup or 'Never'}")
+        formatted_data.append(f"Last User Update: {index.last_user_update or 'Never'}")
+
+        # Creation/modification dates
+        formatted_data.append(f"Created: {index.create_date or 'N/A'}")
+        formatted_data.append(f"Modified: {index.modify_date or 'N/A'}")
+
+        formatted_data.append("-" * 30)
+
+    return "\n".join(formatted_data)
+
+
 
 
 if __name__ == "__main__":
