@@ -7,6 +7,9 @@ from .models import (
     PROCEDURE_CHAT_TABLE_NAMES, PROCEDURE_ID_FIELDS, COLUMN_MAPPING
 )
 import json
+import datetime
+import pyodbc
+import sqlparse
 
 # Initialize database on module import
 _ensure_db()
@@ -435,3 +438,118 @@ def get_db_indexes(pbi_id: int) -> List[DBIndexRecord]:
         return records
     finally:
         conn.close()
+
+
+def safe_pretty_json(record: dict) -> dict:
+    """Convert record values to safe JSON-serializable format"""
+    safe_record = {}
+    for k, v in record.items():
+        if k == "Query Text":
+            safe_record[k] = sqlparse.format(v, keyword_case='upper', output_format='sql', reindent=True)
+        elif isinstance(v, datetime.datetime):
+            safe_record[k] = v.isoformat()
+        elif isinstance(v, datetime.date):
+            safe_record[k] = v.isoformat()
+        elif isinstance(v, datetime.time):
+            safe_record[k] = v.isoformat()
+        elif isinstance(v, bytes):
+            # Convert bytes to hex string for display
+            safe_record[k] = v.hex() if v else ''
+        else:
+            safe_record[k] = v
+    return safe_record
+
+
+def process_over_indexing_analysis(record: BlitzIndexRecord, db_connection) -> List[DBIndexRecord]:
+    """
+    Process over-indexing analysis for BlitzIndex records by executing the more_info SQL
+    and storing the detailed index data.
+
+    Args:
+        record: The BlitzIndexRecord containing the more_info SQL to execute
+        db_connection: Database connection object
+
+    Returns:
+        List of DBIndexRecord objects containing the processed index data
+
+    Raises:
+        pyodbc.Error: If database operation fails
+        ValueError: If data processing fails
+        KeyError: If required columns are missing
+    """
+    index_records = []
+
+    db_connection = _get_conn()
+
+    try:
+        cursor = db_connection.cursor()
+        cursor.execute(record.more_info)
+
+        # Skip to the result set with index data
+        while cursor.description is None:
+            if not cursor.nextset():
+                break
+
+        if cursor.description:
+            columns = [desc[0] for desc in cursor.description]
+            rows = cursor.fetchall()
+
+            # Convert rows to list of DBIndexRecord objects and skip first row (Q1)
+            for i, row in enumerate(rows):
+                if i == 0:  # Skip first row (Q1)
+                    continue
+                row_dict = dict(zip(columns, row))
+                # Serialize the data for storage
+                serialized_row = safe_pretty_json(row_dict)
+
+                # Map sp_BlitzIndex columns to DBIndexRecord fields
+                mapped_data = {}
+
+                # Map the columns from sp_BlitzIndex to DBIndexRecord fields
+                column_mapping = {
+                    'Details: db_schema.table.index(indexid)': 'db_schema_object_indexid',
+                    'Definition: [Property] ColumnName {datatype maxbytes}': 'index_definition',
+                    'Secret Columns': 'secret_columns',
+                    'Fillfactor': 'fill_factor',
+                    'Usage Stats': 'index_usage_summary',
+                    'Op Stats': 'index_op_stats',
+                    'Size': 'index_size_summary',
+                    'Compression Type': 'partition_compression_detail',
+                    'Lock Waits': 'index_lock_wait_summary',
+                    'Referenced by FK?': 'is_referenced_by_foreign_key',
+                    'FK Covered by Index?': 'fks_covered_by_index',
+                    'Last User Seek': 'last_user_seek',
+                    'Last User Scan': 'last_user_scan',
+                    'Last User Lookup': 'last_user_lookup',
+                    'Last User Write': 'last_user_update',
+                    'Created': 'create_date',
+                    'Last Modified': 'modify_date',
+                    'Page Latch Wait Count': 'page_latch_wait_count',
+                    'Page Latch Wait Time (D:H:M:S)': 'page_latch_wait_time',
+                    'Page IO Latch Wait Count': 'page_io_latch_wait_count',
+                    'Page IO Latch Wait Time (D:H:M:S)': 'page_io_latch_wait_time',
+                    'Create TSQL': 'create_tsql',
+                    'Drop TSQL': 'drop_tsql'
+                }
+
+                for sp_column, db_field in column_mapping.items():
+                    if sp_column in serialized_row:
+                        value = serialized_row[sp_column]
+                        # Convert boolean strings to integers for FK fields
+                        if db_field == 'is_referenced_by_foreign_key' and isinstance(value, str):
+                            mapped_data[db_field] = 1 if value.lower() == 'true' else 0
+                        else:
+                            mapped_data[db_field] = value
+
+                # Create DBIndexRecord object with mapped data
+                index_record = DBIndexRecord(pbi_id=record.pbi_id, **mapped_data)
+                index_records.append(index_record)
+
+            # Store the detailed index data
+            if index_records:
+                store_db_indexes(index_records, record.pbi_id)
+
+    except (pyodbc.Error, ValueError, KeyError) as e:
+        raise e
+
+    return index_records
