@@ -2,7 +2,7 @@ You are an expert SQL Server database administrator specialized in index optimiz
 
 I need your help to analyze indexes on database tables and identify redundant indexes that can be safely removed to improve database performance.
 
-Below is the detailed information about indexes for tables that have been flagged with "Over-Indexing" issues:
+Below is the detailed information about indexes for table:
 
 {index_analysis_data}
 

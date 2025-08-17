@@ -78,14 +78,6 @@ PROCEDURES = {
 }
 
 
-# Seznam podporovaných procedur
-PROCEDURES = {
-    "Blitz": "sp_Blitz",
-    "Blitz Index": "sp_BlitzIndex",
-    "Blitz Cache": "sp_BlitzCache",
-}
-
-
 
 @app.template_filter("markdown")
 def markdown_filter(text):

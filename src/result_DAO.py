@@ -460,7 +460,7 @@ def safe_pretty_json(record: dict) -> dict:
     return safe_record
 
 
-def process_over_indexing_analysis(record: BlitzIndexRecord, db_connection) -> List[DBIndexRecord]:
+def process_over_indexing_analysis(record: BlitzIndexRecord) -> List[DBIndexRecord]:
     """
     Process over-indexing analysis for BlitzIndex records by executing the more_info SQL
     and storing the detailed index data.
