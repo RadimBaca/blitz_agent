@@ -77,6 +77,13 @@ PROCEDURES = {
     "Blitz Cache": "sp_BlitzCache",
 }
 
+# Mapping procedure names to record ID fields
+PROCEDURES_ID_MAPPING = {
+    "sp_Blitz": "pb_id",
+    "sp_BlitzIndex": "pbi_id",
+    "sp_BlitzCache": "pbc_id"
+}
+
 
 
 @app.template_filter("markdown")
@@ -471,10 +478,15 @@ def analyze(display_name, rec_id):
             chat_history = dao.get_chat_history(procedure_name, rec_id) or []
             chat_history.append(("user", user_input))
 
-            result = blitz_agent.agent_executor.invoke({
-                "input": user_input,
-                "chat_history": chat_history
-            })
+            # Get the actual record ID (pb_id, pbi_id, or pbc_id) for recommendations
+            actual_record_id = getattr(record, PROCEDURES_ID_MAPPING.get(procedure_name, "pb_id"))
+
+            result = blitz_agent.execute(
+                procedure=procedure_name,
+                record_id=actual_record_id,
+                user_input=user_input,
+                chat_history=chat_history
+            )
             chat_history.append(("ai", result["output"]))
             dao.store_chat_history(procedure_name, rec_id, chat_history)
             return redirect(url_for("analyze", display_name=display_name, rec_id=rec_id))
@@ -514,7 +526,15 @@ def analyze(display_name, rec_id):
             record_dict.pop("raw_record", None)
             store_user_question = "\n".join(f"**{k}**: {v}" for k, v in record_dict.items())
 
-            result = blitz_agent.agent_executor.invoke({"input": user_question, "chat_history": []})
+            # Get the actual record ID (pb_id, pbi_id, or pbc_id) for recommendations
+            actual_record_id = getattr(record, PROCEDURES_ID_MAPPING.get(procedure_name, "pb_id"))
+
+            result = blitz_agent.execute(
+                procedure=procedure_name,
+                record_id=actual_record_id,
+                user_input=user_question,
+                chat_history=[]
+            )
             chat_history = [("user", store_user_question), ("ai", result["output"])]
             dao.store_chat_history(procedure_name, rec_id, chat_history)
 
@@ -524,9 +544,50 @@ def analyze(display_name, rec_id):
                             chat_history=chat_history,
                             procedures=PROCEDURES,
                             connections=db_dao.get_all_db_connections(),
-                            actual_db_id=db_conn.get_actual_db_id())
+                            actual_db_id=db_conn.get_actual_db_id(),
+                            record_recommendations=dao.get_recommendations_for_record(
+                                procedure_name, getattr(record, PROCEDURES_ID_MAPPING.get(procedure_name, "pb_id"))
+                            ))
     except (pyodbc.Error, ValueError) as e:
         return get_database_error_message(e, "analysis", display_name)
+
+@app.route("/recommendations")
+def recommendations():
+    """List all recommendations for the current database"""
+    try:
+        current_connections = db_dao.get_all_db_connections()
+        all_recommendations = dao.get_all_recommendations(db_conn.get_actual_db_id())
+
+        return render_template("recommendations.html",
+                             proc_name="Recommendations",
+                             procedures=PROCEDURES,
+                             recommendations=all_recommendations,
+                             connections=current_connections,
+                             actual_db_id=db_conn.get_actual_db_id())
+    except (pyodbc.Error, ValueError) as e:
+        return get_database_error_message(e, "loading recommendations")
+
+@app.route("/recommendation/<int:id_recom>")
+def recommendation_detail(id_recom):
+    """Show detail of a specific recommendation"""
+    try:
+        current_connections = db_dao.get_all_db_connections()
+        recommendation = dao.get_recommendation(db_conn.get_actual_db_id(), id_recom)
+
+        if not recommendation:
+            return render_template("notfound.html",
+                                 proc_name="Recommendation Not Found",
+                                 procedures=PROCEDURES,
+                                 actual_db_id=db_conn.get_actual_db_id())
+
+        return render_template("recommendation_detail.html",
+                             proc_name=f"Recommendation #{id_recom}",
+                             procedures=PROCEDURES,
+                             recommendation=recommendation,
+                             connections=current_connections,
+                             actual_db_id=db_conn.get_actual_db_id())
+    except (pyodbc.Error, ValueError) as e:
+        return get_database_error_message(e, "loading recommendation")
 
 PORT = int(os.getenv("APP_PORT", '5001'))
 

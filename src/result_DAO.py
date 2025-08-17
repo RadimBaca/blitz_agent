@@ -1,8 +1,9 @@
 from typing import List, Optional, Tuple, Dict, Any, Union
 from .connection_DAO import _ensure_db, _get_conn
+from . import db_connection
 from .models import (
     BlitzRecord, BlitzIndexRecord, BlitzCacheRecord,
-    DBIndexRecord,
+    DBIndexRecord, Recommendation,
     PROCEDURE_MODELS, PROCEDURE_TABLE_NAMES,
     PROCEDURE_CHAT_TABLE_NAMES, PROCEDURE_ID_FIELDS, COLUMN_MAPPING
 )
@@ -479,16 +480,16 @@ def process_over_indexing_analysis(record: BlitzIndexRecord) -> List[DBIndexReco
     """
     index_records = []
 
-    db_connection = _get_conn()
-
+    # Use SQL Server connection for executing more_info SQL
     try:
-        cursor = db_connection.cursor()
-        cursor.execute(record.more_info)
+        with db_connection.get_connection() as sql_server_conn:
+            cursor = sql_server_conn.cursor()
+            cursor.execute(record.more_info)
 
-        # Skip to the result set with index data
-        while cursor.description is None:
-            if not cursor.nextset():
-                break
+            # Skip to the result set with index data
+            while cursor.description is None:
+                if not cursor.nextset():
+                    break
 
         if cursor.description:
             columns = [desc[0] for desc in cursor.description]
@@ -553,3 +554,253 @@ def process_over_indexing_analysis(record: BlitzIndexRecord) -> List[DBIndexReco
         raise e
 
     return index_records
+
+
+# Recommendation methods
+def insert_recommendation(description: str, sql_command: Optional[str],
+                         pb_id: Optional[int] = None,
+                         pbi_id: Optional[int] = None,
+                         pbc_id: Optional[int] = None) -> int:
+    """Insert a new recommendation and return its ID"""
+    _ensure_db()
+    conn = _get_conn()
+
+    # Validate that exactly one foreign key is provided
+    foreign_keys = [pb_id, pbi_id, pbc_id]
+    non_null_keys = [key for key in foreign_keys if key is not None]
+
+    if len(non_null_keys) != 1:
+        raise ValueError("Exactly one of pb_id, pbi_id, or pbc_id must be provided")
+
+    try:
+        cur = conn.execute("""
+            INSERT INTO Recommendation (description, sql_command, pb_id, pbi_id, pbc_id)
+            VALUES (?, ?, ?, ?, ?)
+        """, (description, sql_command, pb_id, pbi_id, pbc_id))
+
+        # Get the last inserted ID
+        cur = conn.execute("SELECT last_insert_rowid()")
+        recommendation_id = cur.fetchone()[0]
+
+        conn.commit()
+        return recommendation_id
+
+    except pyodbc.Error as e:
+        conn.rollback()
+        raise e
+
+
+def get_recommendations(db_id: int, procedure: str) -> List[Recommendation]:
+    """Get all recommendations for a specific procedure and database"""
+    _ensure_db()
+    conn = _get_conn()
+
+    # Map procedure names to table columns and foreign key fields
+    procedure_mapping = {
+        "sp_Blitz": ("pb_id", "Procedure_blitz"),
+        "sp_BlitzIndex": ("pbi_id", "Procedure_blitzindex"),
+        "sp_BlitzCache": ("pbc_id", "Procedure_blitzcache")
+    }
+
+    if procedure not in procedure_mapping:
+        raise ValueError(f"Unsupported procedure: {procedure}")
+
+    fk_field, procedure_table = procedure_mapping[procedure]
+
+    try:
+        # Get procedure calls for this database
+        cur = conn.execute("""
+            SELECT pc_id FROM Procedure_call
+            WHERE db_id = ? AND p_id = (
+                SELECT p_id FROM Procedure_type WHERE procedure_name = ?
+            )
+        """, (db_id, procedure))
+
+        pc_ids = [row[0] for row in cur.fetchall()]
+
+        if not pc_ids:
+            return []
+
+        # Create placeholders for IN clause
+        placeholders = ','.join(['?'] * len(pc_ids))
+
+        # Get recommendations for this procedure and database
+        query = f"""
+            SELECT r.id_recom, r.description, r.sql_command,
+                   r.pb_id, r.pbi_id, r.pbc_id, r.created_at
+            FROM Recommendation r
+            JOIN {procedure_table} p ON r.{fk_field} = p.{fk_field}
+            WHERE p.pc_id IN ({placeholders})
+            ORDER BY r.created_at DESC
+        """
+
+        cur = conn.execute(query, pc_ids)
+        recommendations = []
+
+        for row in cur.fetchall():
+            recommendation = Recommendation(
+                id_recom=row[0],
+                description=row[1],
+                sql_command=row[2],
+                pb_id=row[3],
+                pbi_id=row[4],
+                pbc_id=row[5],
+                created_at=row[6]
+            )
+            recommendations.append(recommendation)
+
+        return recommendations
+
+    except pyodbc.Error as e:
+        raise e
+
+
+def get_all_recommendations(db_id: int) -> List[Recommendation]:
+    """Get all recommendations for a specific database across all procedures"""
+    _ensure_db()
+    conn = _get_conn()
+
+    try:
+        # Get procedure calls for this database
+        cur = conn.execute("SELECT pc_id FROM Procedure_call WHERE db_id = ?", (db_id,))
+        pc_ids = [row[0] for row in cur.fetchall()]
+
+        if not pc_ids:
+            return []
+
+        # Create placeholders for IN clause
+        placeholders = ','.join(['?'] * len(pc_ids))
+
+        # Get all recommendations for this database
+        query = f"""
+            SELECT DISTINCT r.id_recom, r.description, r.sql_command,
+                   r.pb_id, r.pbi_id, r.pbc_id, r.created_at
+            FROM Recommendation r
+            LEFT JOIN Procedure_blitz pb ON r.pb_id = pb.pb_id
+            LEFT JOIN Procedure_blitzindex pbi ON r.pbi_id = pbi.pbi_id
+            LEFT JOIN Procedure_blitzcache pbc ON r.pbc_id = pbc.pbc_id
+            WHERE pb.pc_id IN ({placeholders})
+               OR pbi.pc_id IN ({placeholders})
+               OR pbc.pc_id IN ({placeholders})
+            ORDER BY r.created_at DESC
+        """
+
+        # Triple the pc_ids for the three conditions
+        params = pc_ids + pc_ids + pc_ids
+        cur = conn.execute(query, params)
+
+        recommendations = []
+        for row in cur.fetchall():
+            recommendation = Recommendation(
+                id_recom=row[0],
+                description=row[1],
+                sql_command=row[2],
+                pb_id=row[3],
+                pbi_id=row[4],
+                pbc_id=row[5],
+                created_at=row[6]
+            )
+            recommendations.append(recommendation)
+
+        return recommendations
+
+    except pyodbc.Error as e:
+        raise e
+
+
+def get_recommendation(db_id: int, id_recom: int) -> Optional[Recommendation]:
+    """Get a specific recommendation by ID for a database"""
+    _ensure_db()
+    conn = _get_conn()
+
+    try:
+        # Get procedure calls for this database
+        cur = conn.execute("SELECT pc_id FROM Procedure_call WHERE db_id = ?", (db_id,))
+        pc_ids = [row[0] for row in cur.fetchall()]
+
+        if not pc_ids:
+            return None
+
+        # Create placeholders for IN clause
+        placeholders = ','.join(['?'] * len(pc_ids))
+
+        # Get the specific recommendation
+        query = f"""
+            SELECT r.id_recom, r.description, r.sql_command,
+                   r.pb_id, r.pbi_id, r.pbc_id, r.created_at
+            FROM Recommendation r
+            LEFT JOIN Procedure_blitz pb ON r.pb_id = pb.pb_id
+            LEFT JOIN Procedure_blitzindex pbi ON r.pbi_id = pbi.pbi_id
+            LEFT JOIN Procedure_blitzcache pbc ON r.pbc_id = pbc.pbc_id
+            WHERE r.id_recom = ?
+              AND (pb.pc_id IN ({placeholders})
+                   OR pbi.pc_id IN ({placeholders})
+                   OR pbc.pc_id IN ({placeholders}))
+        """
+
+        # Create parameters: id_recom + triple pc_ids
+        params = [id_recom] + pc_ids + pc_ids + pc_ids
+        cur = conn.execute(query, params)
+
+        row = cur.fetchone()
+        if row:
+            return Recommendation(
+                id_recom=row[0],
+                description=row[1],
+                sql_command=row[2],
+                pb_id=row[3],
+                pbi_id=row[4],
+                pbc_id=row[5],
+                created_at=row[6]
+            )
+
+        return None
+
+    except pyodbc.Error as e:
+        raise e
+
+
+def get_recommendations_for_record(procedure_name: str, record_id: int) -> List[Recommendation]:
+    """Get all recommendations for a specific record"""
+    _ensure_db()
+    conn = _get_conn()
+
+    # Map procedure names to foreign key fields
+    fk_mapping = {
+        "sp_Blitz": "pb_id",
+        "sp_BlitzIndex": "pbi_id",
+        "sp_BlitzCache": "pbc_id"
+    }
+
+    if procedure_name not in fk_mapping:
+        raise ValueError(f"Unsupported procedure: {procedure_name}")
+
+    fk_field = fk_mapping[procedure_name]
+
+    try:
+        query = f"""
+            SELECT id_recom, description, sql_command, pb_id, pbi_id, pbc_id, created_at
+            FROM Recommendation
+            WHERE {fk_field} = ?
+            ORDER BY created_at DESC
+        """
+
+        cur = conn.execute(query, (record_id,))
+        recommendations = []
+
+        for row in cur.fetchall():
+            recommendation = Recommendation(
+                id_recom=row[0],
+                description=row[1],
+                sql_command=row[2],
+                pb_id=row[3],
+                pbi_id=row[4],
+                pbc_id=row[5],
+                created_at=row[6]
+            )
+            recommendations.append(recommendation)
+
+        return recommendations
+
+    except pyodbc.Error as e:
+        raise e

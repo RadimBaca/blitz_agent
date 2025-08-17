@@ -39,4 +39,13 @@ Please analyze these indexes and:
    - SQL DROP statements for safe removals
    - Risk assessment for each recommendation
 
+5. **Create actionable recommendations using `add_recommendation()` for each specific index removal:**
+   - Use `add_recommendation(description, sql_command)` for each DROP INDEX command
+   - Include clear reasoning in the description
+   - Provide the exact DROP INDEX statement as sql_command
+
 Focus on indexes that are clearly redundant or unused, and provide conservative recommendations that prioritize database stability.
+
+**Example of using the recommendation tool:**
+If you identify that index IX_Users_LastName can be safely removed, create a recommendation like:
+`add_recommendation("Remove redundant index IX_Users_LastName on Users table - functionality covered by IX_Users_LastName_FirstName", "DROP INDEX IX_Users_LastName ON dbo.Users;")`

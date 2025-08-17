@@ -4,8 +4,6 @@
 
 {% block page_header %}Blitz Cache Results for {{ proc_name }} - SQL Server Plan Cache Analysis Summary{% endblock %}
 
-{% block load_button_text %}Load Blitz Cache Results{% endblock %}
-
 {% block sidebar_filters %}
 <!-- BlitzCache Filters -->
 <div class="sidebar-filter-section">
@@ -74,6 +72,10 @@
 {% endblock %}
 
 {% block content %}
+
+            <form method="POST" action="/init/{{ proc_name }}">
+                <button type="submit">Load Blitz Cache Results</button>
+            </form>
 
             {% if records %}
 

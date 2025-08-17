@@ -44,6 +44,7 @@
                 {% for key, name in procedures.items() %}
                     <li><a href="/{{ key }}">{{ key }}</a></li>
                 {% endfor %}
+                <li><a href="/recommendations">Recommendations</a></li>
             </ul>
 
             <!-- Filters section - only show for Blitz, BlitzIndex, and BlitzCache -->
@@ -59,12 +60,6 @@
                 <h2>{% block page_header %}{% endblock %}</h2>
                 <a href="/administration" class="admin-link">⚙️ Administration</a>
             </div>
-            {% endblock %}
-
-            {% block load_form %}
-            <form method="POST" action="/init/{{ proc_name }}">
-                <button type="submit">{% block load_button_text %}Load Results{% endblock %}</button>
-            </form>
             {% endblock %}
 
             {% block content %}

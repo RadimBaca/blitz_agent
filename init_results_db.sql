@@ -109,6 +109,22 @@ CREATE TABLE DB_Indexes (
   drop_tsql TEXT
 );
 
+-- Table for storing recommendations based on analysis
+CREATE TABLE Recommendation (
+  id_recom INTEGER PRIMARY KEY,
+  description TEXT NOT NULL,
+  sql_command TEXT,
+  pb_id INTEGER REFERENCES Procedure_blitz (pb_id),
+  pbi_id INTEGER REFERENCES Procedure_blitzindex (pbi_id),
+  pbc_id INTEGER REFERENCES Procedure_blitzcache (pbc_id),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT check_single_reference CHECK (
+    (pb_id IS NOT NULL AND pbi_id IS NULL AND pbc_id IS NULL) OR
+    (pb_id IS NULL AND pbi_id IS NOT NULL AND pbc_id IS NULL) OR
+    (pb_id IS NULL AND pbi_id IS NULL AND pbc_id IS NOT NULL)
+  )
+);
+
 
 INSERT INTO Procedure_type VALUES (1, 'Blitz', 'sp_Blitz'),
                                  (2, 'Blitz Index', 'sp_BlitzIndex'),

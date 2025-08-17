@@ -35,5 +35,24 @@
         <button type="submit">Ask</button>
     </form>
 
+    {% if record_recommendations %}
+    <div class="recommendations-section">
+        <h3>Related Recommendations</h3>
+        <div class="alert alert-info">
+            <p>The following recommendations were created during analysis of this record:</p>
+            <ul>
+                {% for rec in record_recommendations %}
+                    <li>
+                        <a href="{{ url_for('recommendation_detail', id_recom=rec.id_recom) }}">
+                            Recommendation #{{ rec.id_recom }}
+                        </a>
+                        - {{ rec.description[:100] }}{% if rec.description|length > 100 %}...{% endif %}
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+    {% endif %}
+
     <p><a href="{{ url_for('procedure', display_name=proc_name) }}">← Back</a></p>
 {% endblock %}
