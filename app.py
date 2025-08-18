@@ -24,6 +24,15 @@ def get_procedure_name(display_name: str) -> str:
     """Convert display name to actual procedure name for database operations"""
     return PROCEDURES.get(display_name, display_name)
 
+def redirect_to_display_name(display_name: str):
+    """Handle redirection to the correct route based on display name"""
+    if display_name == "Administration":
+        return redirect(url_for('administration'))
+    elif display_name == "Recommendations":
+        return redirect(url_for('recommendations'))
+    else:
+        return redirect(url_for('procedure', display_name=display_name))
+
 def get_database_error_message(error: Exception, context: str = "operation", display_name: str = None) -> tuple:
     """
     Generate user-friendly error messages and HTML response for database connection issues.
@@ -104,14 +113,14 @@ def select_database():
 
     # Redirect back to the current procedure
     display_name = request.form.get("current_proc", "Blitz")
-    return redirect(url_for('procedure', display_name=display_name))
+    return redirect_to_display_name(display_name)
 
 @app.route("/refresh_connections", methods=["POST"])
 def refresh_connections():
     """Handle refresh button click to reload connections"""
     # Simply redirect back to refresh the page with updated connections
     display_name = request.form.get("current_proc", "Blitz")
-    return redirect(url_for('procedure', display_name=display_name))
+    return redirect_to_display_name(display_name)
 
 @app.route("/add_database", methods=["POST"])
 def add_database():
@@ -143,7 +152,7 @@ def add_database():
 
         # Redirect back to the current procedure
         display_name = request.form.get("current_proc", "Blitz")
-        return redirect(url_for('procedure', display_name=display_name))
+        return redirect_to_display_name(display_name)
 
     except (pyodbc.Error, ValueError) as e:
         # Handle errors - in a real app, you'd want better error handling
@@ -165,7 +174,7 @@ def delete_database():
         if len(all_connections) <= 1:
             print("Cannot delete the last database connection")
             display_name = request.form.get("current_proc", "Blitz")
-            return redirect(url_for('procedure', display_name=display_name))
+            return redirect_to_display_name(display_name)
 
         # If deleting the currently active database, switch to another one
         current_db_id = db_conn.get_actual_db_id()
@@ -181,12 +190,12 @@ def delete_database():
 
         # Redirect back to the current procedure
         display_name = request.form.get("current_proc", "Blitz")
-        return redirect(url_for('procedure', display_name=display_name))
+        return redirect_to_display_name(display_name)
 
     except (pyodbc.Error, ValueError) as e:
         print(f"Error deleting database: {e}")
         display_name = request.form.get("current_proc", "Blitz")
-        return redirect(url_for('procedure', display_name=display_name))
+        return redirect_to_display_name(display_name)
 
 @app.route("/administration")
 def administration():
