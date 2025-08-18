@@ -6,10 +6,11 @@ This is NOT a pytest test - it should be run directly as a standalone script.
 
 import sys
 import os
+from workload_generator import get_connection, get_sample_data, run_workload_queries
+
 # Add the tests directory to the path to find workload_generator
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'tests'))
 
-from workload_generator import get_connection, get_sample_data, run_workload_queries
 
 def test_connection():
     """Test database connection"""
