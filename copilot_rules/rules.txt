@@ -4,3 +4,6 @@ When generating code try to follow the following coding style:
 3. Place constants into variables/arrays/maps
 
 When running a python code use the venv virual environment that is already in directory. i.e. `source venv/bin/activate`.
+Run all tests in the tests directory using pytest.
+
+SQLite DB that is used in `result_DAO.py` is called `state database`.
