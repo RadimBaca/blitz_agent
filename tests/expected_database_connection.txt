@@ -1,0 +1,1 @@
+(1, 'AdventureWorks2019', 'k2_zoot', 'bayer.cs.vsb.cz', 50042)
