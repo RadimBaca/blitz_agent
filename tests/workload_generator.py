@@ -577,7 +577,7 @@ def execute_workload(duration_minutes=5, _concurrent_sessions=1):
 
     return True  # Indicate workload completed
 
-def test_specific_scenarios():
+def specific_scenarios():
     """Test specific database scenarios that might trigger sp_Blitz* findings"""
 
     print("\n=== TESTING SPECIFIC SCENARIOS ===")
@@ -673,7 +673,7 @@ def main():
         elif choice == '3':
             workload_completed = execute_workload(duration_minutes=10)
         elif choice == '4':
-            test_specific_scenarios()
+            specific_scenarios()
         elif choice == '5':
             print("Exiting...")
             return
@@ -683,7 +683,7 @@ def main():
 
         # Always run specific scenarios after workload (if workload was executed)
         if workload_completed and choice in ['1', '2', '3']:
-            test_specific_scenarios()
+            specific_scenarios()
 
         # Clean up any inserted records
         cleanup_inserted_records()
