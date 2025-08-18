@@ -224,7 +224,74 @@ class TestAppIntegration:
         assert priority_check_result, f"Priority 10 record check failed. Expected content in {expected_priority_file} does not match actual query result."
         print("✓ Priority 10 record found in state database")
 
-        print("Integration test completed")
+        # Step 7: Get the rec_id (procedure_order) of the priority 10 record for analyze endpoint
+        print("Step 7: Getting rec_id of priority 10 record...")
+
+        conn = _get_conn()
+        cursor = conn.cursor()
+        cursor.execute("""
+        SELECT procedure_order, finding
+        FROM Procedure_blitzindex
+        WHERE priority = 10
+        LIMIT 1
+        """)
+        result = cursor.fetchone()
+        cursor.close()
+        conn.close()
+
+        assert result is not None, "No priority 10 record found to get rec_id"
+        rec_id = result[0]
+        finding = result[1]
+        print(f"✓ Found priority 10 record with rec_id: {rec_id}, finding: {finding}")
+
+        # Verify it's an over-indexing record
+        assert finding and finding.startswith("Over-Indexing"), f"Expected Over-Indexing finding, got: {finding}"
+        print("✓ Confirmed record is Over-Indexing type")
+
+        # Step 8: Call analyze endpoint for the priority 10 record
+        print("Step 8: Calling analyze endpoint for over-indexing analysis...")
+
+        analyze_url = f"{app_url}/analyze/Blitz Index/{rec_id}"
+        response = requests.get(analyze_url, timeout=30)
+        print(f"Analyze endpoint response status: {response.status_code}")
+
+        # Assert that the analyze endpoint call was successful
+        assert response.status_code in [200, 302], f"Analyze endpoint failed with status {response.status_code}. Response: {response.text[:500]}"
+        print("✓ Analyze endpoint called successfully")
+
+        # Step 9: Verify that 12 records are inserted into DB_Indexes table
+        print("Step 9: Checking DB_Indexes table for Product table indexes...")
+
+        conn = _get_conn()
+        cursor = conn.cursor()
+
+        # First, get the pbi_id for our priority 10 record
+        cursor.execute("""
+        SELECT pbi_id
+        FROM Procedure_blitzindex
+        WHERE priority = 10 AND procedure_order = ?
+        """, (rec_id,))
+        pbi_result = cursor.fetchone()
+        assert pbi_result is not None, f"Could not find pbi_id for rec_id {rec_id}"
+        pbi_id = pbi_result[0]
+
+        # Now check how many DB_Indexes records were created for this pbi_id
+        cursor.execute("""
+        SELECT COUNT(*)
+        FROM DB_Indexes
+        WHERE pbi_id = ?
+        """, (pbi_id,))
+        db_indexes_count = cursor.fetchone()[0]
+        cursor.close()
+        conn.close()
+
+        print(f"Found {db_indexes_count} records in DB_Indexes table for pbi_id {pbi_id}")
+
+        # Assert that exactly 12 records were inserted (Product table has 12 indexes)
+        assert db_indexes_count == 12, f"Expected 12 DB_Indexes records for Product table, but found {db_indexes_count}"
+        print("✓ Confirmed 12 DB_Indexes records created for Product table over-indexing analysis")
+
+        print("Integration test completed successfully!")
 
         # At minimum, verify that the database connection was properly stored
         # This tests the core state database functionality

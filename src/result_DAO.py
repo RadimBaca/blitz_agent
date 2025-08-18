@@ -507,64 +507,64 @@ def process_over_indexing_analysis(record: BlitzIndexRecord) -> List[DBIndexReco
                 if not cursor.nextset():
                     break
 
-        if cursor.description:
-            columns = [desc[0] for desc in cursor.description]
-            rows = cursor.fetchall()
+            if cursor.description:
+                columns = [desc[0] for desc in cursor.description]
+                rows = cursor.fetchall()
 
-            # Convert rows to list of DBIndexRecord objects and skip first row (Q1)
-            for i, row in enumerate(rows):
-                if i == 0:  # Skip first row (Q1)
-                    continue
-                row_dict = dict(zip(columns, row))
-                # Serialize the data for storage
-                serialized_row = safe_pretty_json(row_dict)
+                # Convert rows to list of DBIndexRecord objects and skip first row (Q1)
+                for i, row in enumerate(rows):
+                    if i == 0:  # Skip first row (Q1)
+                        continue
+                    row_dict = dict(zip(columns, row))
+                    # Serialize the data for storage
+                    serialized_row = safe_pretty_json(row_dict)
 
-                # Map sp_BlitzIndex columns to DBIndexRecord fields
-                mapped_data = {}
+                    # Map sp_BlitzIndex columns to DBIndexRecord fields
+                    mapped_data = {}
 
-                # Map the columns from sp_BlitzIndex to DBIndexRecord fields
-                column_mapping = {
-                    'Details: db_schema.table.index(indexid)': 'db_schema_object_indexid',
-                    'Definition: [Property] ColumnName {datatype maxbytes}': 'index_definition',
-                    'Secret Columns': 'secret_columns',
-                    'Fillfactor': 'fill_factor',
-                    'Usage Stats': 'index_usage_summary',
-                    'Op Stats': 'index_op_stats',
-                    'Size': 'index_size_summary',
-                    'Compression Type': 'partition_compression_detail',
-                    'Lock Waits': 'index_lock_wait_summary',
-                    'Referenced by FK?': 'is_referenced_by_foreign_key',
-                    'FK Covered by Index?': 'fks_covered_by_index',
-                    'Last User Seek': 'last_user_seek',
-                    'Last User Scan': 'last_user_scan',
-                    'Last User Lookup': 'last_user_lookup',
-                    'Last User Write': 'last_user_update',
-                    'Created': 'create_date',
-                    'Last Modified': 'modify_date',
-                    'Page Latch Wait Count': 'page_latch_wait_count',
-                    'Page Latch Wait Time (D:H:M:S)': 'page_latch_wait_time',
-                    'Page IO Latch Wait Count': 'page_io_latch_wait_count',
-                    'Page IO Latch Wait Time (D:H:M:S)': 'page_io_latch_wait_time',
-                    'Create TSQL': 'create_tsql',
-                    'Drop TSQL': 'drop_tsql'
-                }
+                    # Map the columns from sp_BlitzIndex to DBIndexRecord fields
+                    column_mapping = {
+                        'Details: db_schema.table.index(indexid)': 'db_schema_object_indexid',
+                        'Definition: [Property] ColumnName {datatype maxbytes}': 'index_definition',
+                        'Secret Columns': 'secret_columns',
+                        'Fillfactor': 'fill_factor',
+                        'Usage Stats': 'index_usage_summary',
+                        'Op Stats': 'index_op_stats',
+                        'Size': 'index_size_summary',
+                        'Compression Type': 'partition_compression_detail',
+                        'Lock Waits': 'index_lock_wait_summary',
+                        'Referenced by FK?': 'is_referenced_by_foreign_key',
+                        'FK Covered by Index?': 'fks_covered_by_index',
+                        'Last User Seek': 'last_user_seek',
+                        'Last User Scan': 'last_user_scan',
+                        'Last User Lookup': 'last_user_lookup',
+                        'Last User Write': 'last_user_update',
+                        'Created': 'create_date',
+                        'Last Modified': 'modify_date',
+                        'Page Latch Wait Count': 'page_latch_wait_count',
+                        'Page Latch Wait Time (D:H:M:S)': 'page_latch_wait_time',
+                        'Page IO Latch Wait Count': 'page_io_latch_wait_count',
+                        'Page IO Latch Wait Time (D:H:M:S)': 'page_io_latch_wait_time',
+                        'Create TSQL': 'create_tsql',
+                        'Drop TSQL': 'drop_tsql'
+                    }
 
-                for sp_column, db_field in column_mapping.items():
-                    if sp_column in serialized_row:
-                        value = serialized_row[sp_column]
-                        # Convert boolean strings to integers for FK fields
-                        if db_field == 'is_referenced_by_foreign_key' and isinstance(value, str):
-                            mapped_data[db_field] = 1 if value.lower() == 'true' else 0
-                        else:
-                            mapped_data[db_field] = value
+                    for sp_column, db_field in column_mapping.items():
+                        if sp_column in serialized_row:
+                            value = serialized_row[sp_column]
+                            # Convert boolean strings to integers for FK fields
+                            if db_field == 'is_referenced_by_foreign_key' and isinstance(value, str):
+                                mapped_data[db_field] = 1 if value.lower() == 'true' else 0
+                            else:
+                                mapped_data[db_field] = value
 
-                # Create DBIndexRecord object with mapped data
-                index_record = DBIndexRecord(pbi_id=record.pbi_id, **mapped_data)
-                index_records.append(index_record)
+                    # Create DBIndexRecord object with mapped data
+                    index_record = DBIndexRecord(pbi_id=record.pbi_id, **mapped_data)
+                    index_records.append(index_record)
 
-            # Store the detailed index data
-            if index_records:
-                store_db_indexes(index_records, record.pbi_id)
+                # Store the detailed index data
+                if index_records:
+                    store_db_indexes(index_records, record.pbi_id)
 
     except (pyodbc.Error, ValueError, KeyError) as e:
         raise e

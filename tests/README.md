@@ -102,9 +102,13 @@ Integration tests require a running server instance since they test the complete
     4. Verifies Database_connection content in state database
     5. Calls procedure endpoint with Blitz Index parameter
     6. Verifies that state database contains priority 10 records
+    7. Gets rec_id of the priority 10 over-indexing record
+    8. Calls analyze endpoint for over-indexing analysis
+    9. Verifies that 12 DB_Indexes records are created for Product table
   - **Requires running server**: This test will be automatically skipped if server is not running
   - Tests real HTTP endpoints and database interactions
-  - Validates complete application workflow from initialization to results
+  - Validates complete application workflow from initialization to analysis
+  - **Tests over-indexing analysis**: Specifically tests the `process_over_indexing_analysis` functionality
 
 #### Features:
 - **Automatic server detection**: Uses `server_health_check` fixture to verify server availability
