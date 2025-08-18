@@ -473,3 +473,56 @@ def test_recommendation_multiple_databases():
     assert len(db2_recommendations) == 1
     assert db1_recommendations[0].description == "Recommendation for DB1"
     assert db2_recommendations[0].description == "Recommendation for DB2"
+
+
+def test_delete_results_also_deletes_recommendations():
+    """Test that delete_results also deletes related recommendations"""
+    # Store some BlitzIndex records
+    blitzindex_records = [
+        {
+            "Finding": "Missing Index",
+            "Details: schema.table.index(indexid)": "dbo.Users.IX_Users_Email(1)",
+            "Priority": 100,
+            "More Info": "SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID('dbo.Users')"
+        },
+        {
+            "Finding": "Unused Index",
+            "Details: schema.table.index(indexid)": "dbo.Orders.IX_Orders_Date(2)",
+            "Priority": 50,
+            "More Info": "SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID('dbo.Orders')"
+        }
+    ]
+
+    dao.store_records("sp_BlitzIndex", blitzindex_records, db_id=1)
+
+    # Get the stored records to get their IDs
+    records = dao.get_all_records("sp_BlitzIndex", db_id=1)
+    assert len(records) == 2
+
+    # Create recommendations for these records
+    dao.insert_recommendation(
+        description="Fix missing index on Users table",
+        sql_command="CREATE INDEX IX_Users_Email ON dbo.Users(Email)",
+        pbi_id=records[0].pbi_id
+    )
+
+    dao.insert_recommendation(
+        description="Drop unused index on Orders table",
+        sql_command="DROP INDEX IX_Orders_Date ON dbo.Orders",
+        pbi_id=records[1].pbi_id
+    )
+
+    # Verify recommendations exist
+    recommendations = dao.get_all_recommendations(db_id=1)
+    assert len(recommendations) == 2
+
+    # Delete the results - this should also delete the recommendations
+    dao.delete_results("sp_BlitzIndex", db_id=1)
+
+    # Verify recommendations were deleted
+    recommendations_after = dao.get_all_recommendations(db_id=1)
+    assert len(recommendations_after) == 0
+
+    # Verify records were deleted
+    records_after = dao.get_all_records("sp_BlitzIndex", db_id=1)
+    assert len(records_after) == 0

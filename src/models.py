@@ -151,6 +151,13 @@ PROCEDURE_ID_FIELDS = {
     "sp_BlitzCache": "pbc_id",
 }
 
+# Map procedure names to recommendation foreign key fields
+RECOMMENDATION_FK_MAPPING = {
+    "sp_Blitz": "pb_id",
+    "sp_BlitzIndex": "pbi_id",
+    "sp_BlitzCache": "pbc_id"
+}
+
 # Mapping from raw column names to model field names
 COLUMN_MAPPING = {
     "sp_Blitz": {

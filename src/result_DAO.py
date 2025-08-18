@@ -5,7 +5,8 @@ from .models import (
     BlitzRecord, BlitzIndexRecord, BlitzCacheRecord,
     DBIndexRecord, Recommendation,
     PROCEDURE_MODELS, PROCEDURE_TABLE_NAMES,
-    PROCEDURE_CHAT_TABLE_NAMES, PROCEDURE_ID_FIELDS, COLUMN_MAPPING
+    PROCEDURE_CHAT_TABLE_NAMES, PROCEDURE_ID_FIELDS, COLUMN_MAPPING,
+    RECOMMENDATION_FK_MAPPING
 )
 import json
 import datetime
@@ -300,6 +301,21 @@ def delete_results(proc_name: str, db_id: int):
     conn = _get_conn()
     try:
         table_name = PROCEDURE_TABLE_NAMES[proc_name]
+        id_field = PROCEDURE_ID_FIELDS[proc_name]
+        recommendation_fk_field = RECOMMENDATION_FK_MAPPING[proc_name]
+
+        # First delete related recommendations
+        conn.execute(f"""
+            DELETE FROM Recommendation
+            WHERE {recommendation_fk_field} IN (
+                SELECT r.{id_field} FROM Procedure_call pc
+                JOIN Procedure_type pt ON pc.p_id = pt.p_id
+                JOIN {table_name} r ON r.pc_id = pc.pc_id
+                WHERE pt.procedure_name = ? AND pc.db_id = ?
+            )
+        """, (proc_name, db_id))
+
+        # Then delete the main procedure records
         conn.execute(f"""
             DELETE FROM {table_name}
             WHERE pc_id IN (

@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """
-Simple test script to verify the workload generator functions work correctly
+Manual test script to verify the workload generator functions work correctly.
+This is NOT a pytest test - it should be run directly as a standalone script.
 """
 
 import sys
 import os
-sys.path.append(os.path.dirname(__file__))
+# Add the tests directory to the path to find workload_generator
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'tests'))
 
 from workload_generator import get_connection, get_sample_data, run_workload_queries
 
