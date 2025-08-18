@@ -4,6 +4,9 @@ import requests
 from pathlib import Path
 from dotenv import load_dotenv
 
+# Load environment variables
+load_dotenv()
+
 import src.db_DAO as db_dao
 from src.db_DAO import DatabaseConnection
 from src.connection_DAO import _get_conn
@@ -21,21 +24,42 @@ except ImportError:
     wg_main = None
 
 
-# Configuration for running server
-SERVER_BASE_URL = "http://localhost:5001"
-
-
 @pytest.fixture
 def server_health_check():
     """Check if server is running on expected port"""
+    app_url = os.getenv('APP_URL', 'http://localhost:5000')
+
     try:
-        response = requests.get(f"{SERVER_BASE_URL}/", timeout=5)
+        response = requests.get(f"{app_url}/", timeout=5)
         if response.status_code == 200 or response.status_code == 302:  # 302 for redirect
-            return True
+            return app_url
     except requests.ConnectionError:
         pass
 
-    pytest.skip(f"Server not running on {SERVER_BASE_URL}. Please start the server first.")
+    pytest.skip(f"Server not running on {app_url}. Please start the server first.")
+    return False
+
+
+def server_health_check_with_url(app_url: str):
+    """Check if server is running on specified URL
+
+    Args:
+        app_url: URL of the application to check
+
+    Returns:
+        str: The app_url if server is running
+
+    Raises:
+        pytest.skip: If server is not running
+    """
+    try:
+        response = requests.get(f"{app_url}/", timeout=5)
+        if response.status_code == 200 or response.status_code == 302:  # 302 for redirect
+            return app_url
+    except requests.ConnectionError:
+        pass
+
+    pytest.skip(f"Server not running on {app_url}. Please start the server first.")
     return False
 
 
@@ -81,6 +105,9 @@ class TestAppIntegration:
         5. Call procedure endpoint with Blitz Index parameter
         6. Check that state database contains only one record with priority 10
         """
+
+        # Get the server URL from the fixture
+        app_url = server_health_check
 
         # Load environment from Adventure Works directory
         test_env_path = Path(__file__).parent / 'adventureworks_workload' / '.env'
@@ -170,7 +197,7 @@ class TestAppIntegration:
         print("Step 5: Calling procedure endpoint with Blitz Index...")
 
         # Make HTTP request to the running server
-        response = requests.post(f"{SERVER_BASE_URL}/init/Blitz Index", timeout=30)
+        response = requests.post(f"{app_url}/init/Blitz Index", timeout=30)
         print(f"Init endpoint response status: {response.status_code}")
 
         # Assert that the endpoint call was successful
@@ -192,7 +219,8 @@ class TestAppIntegration:
         """
 
         # Use check_state_db procedure to verify the priority 10 record
-        priority_check_result = check_state_db(priority_query, "tests/expected_priority_10.txt")
+        expected_priority_file = "tests/expected_priority_10.txt"
+        priority_check_result = check_state_db(priority_query, expected_priority_file)
         assert priority_check_result, f"Priority 10 record check failed. Expected content in {expected_priority_file} does not match actual query result."
         print("✓ Priority 10 record found in state database")
 

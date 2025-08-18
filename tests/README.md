@@ -43,7 +43,74 @@ python -m pytest tests/test_result_DAO.py -v
 pytest tests/test_result_DAO.py::test_store_and_get_all_records -v
 ```
 
+## Integration Tests
+
+### Prerequisites for Integration Tests
+Integration tests require a running server instance since they test the complete application flow including HTTP endpoints.
+
+### Running Integration Tests
+
+1. **Start the server first** (in a separate terminal):
+   ```bash
+   # Make sure you're in the project root directory
+   cd /path/to/blitz_agent
+
+   # Activate virtual environment
+   source venv/bin/activate
+
+   # Start the Flask server
+   python app.py
+   ```
+
+2. **Configure environment variables**:
+   Make sure your `.env` file contains the `APP_URL` variable:
+   ```
+   APP_URL=http://localhost:5000
+   ```
+
+3. **Run the integration test**:
+   ```bash
+   # In another terminal, run the integration test
+   pytest tests/test_app_integration.py -v
+   ```
+
+### Integration Test Features
+- **Automatic server health check**: The test will automatically check if the server is running on the specified URL
+- **Environment variable configuration**: Uses `APP_URL` from `.env` file (defaults to `http://localhost:5000`)
+- **Complete workflow testing**: Tests the entire flow from database initialization to procedure execution
+- **Adventure Works integration**: Tests with Adventure Works sample database workload
+
+⚠️ **Important**: Integration tests will be automatically skipped if the server is not running. Make sure to start the server before running these tests.
+
 ## Test Descriptions
+
+### test_app_integration.py
+**Integration tests** for the complete application workflow including HTTP endpoints and database operations.
+
+#### Prerequisites:
+- Running Flask server (automatically checked)
+- Environment variables configured in `.env` file
+- Adventure Works database setup (optional, handled automatically)
+
+#### Test Functions:
+
+- **`test_adventure_works_integration()`**
+  - Complete end-to-end integration test following these steps:
+    1. Runs Adventure Works initialization and workload generator
+    2. Deletes existing results database
+    3. Calls init endpoint to create Database_connection record
+    4. Verifies Database_connection content in state database
+    5. Calls procedure endpoint with Blitz Index parameter
+    6. Verifies that state database contains priority 10 records
+  - **Requires running server**: This test will be automatically skipped if server is not running
+  - Tests real HTTP endpoints and database interactions
+  - Validates complete application workflow from initialization to results
+
+#### Features:
+- **Automatic server detection**: Uses `server_health_check` fixture to verify server availability
+- **Environment-based configuration**: Reads `APP_URL` from `.env` file
+- **Graceful failure**: Skips tests with clear message if server is not running
+- **Real database operations**: Tests actual database state and content verification
 
 ### test_result_DAO.py
 Tests for the `src.result_DAO` module, which handles database operations for storing and retrieving procedure results and chat history.
