@@ -61,10 +61,27 @@
             </form>
 
             {% if records %}
+                <!-- Multi-analysis controls -->
+                <div class="multi-analysis-controls">
+                    <div class="selection-controls">
+                        <button type="button" onclick="selectAllRecords()" class="control-btn">Select All</button>
+                        <button type="button" onclick="deselectAllRecords()" class="control-btn">Deselect All</button>
+                    </div>
+                    <div class="analysis-controls">
+                        <form method="POST" action="/analyze_multiple/{{ proc_name }}" id="multiAnalysisForm">
+                            <button type="submit" id="analyzeCheckedBtn" class="analyze-btn" disabled>
+                                Analyze Checked (<span id="selectedCount">0</span>)
+                            </button>
+                        </form>
+                    </div>
+                </div>
 
                 <table>
                     <thead>
                         <tr>
+                            <th style="width: 40px;">
+                                <input type="checkbox" id="selectAllCheckbox" onchange="toggleAllRecords()">
+                            </th>
                             <th>Finding</th>
                             <th>Details</th>
                             <th>Priority</th>
@@ -74,6 +91,10 @@
                     <tbody>
                         {% for rec in records %}
                             <tr {% if rec._analyzed %}style="background-color: #e6f2ff;"{% endif %}>
+                                <td>
+                                    <input type="checkbox" name="selected_records" value="{{ rec._rec_id }}"
+                                           class="record-checkbox" onchange="updateAnalyzeButton()">
+                                </td>
                                 <td>{{ rec.finding if rec.finding else '' }}</td>
                                 <td>{{ rec.details if rec.details else '' }}</td>
                                 <td>{{ rec.priority if rec.priority else '' }}</td>
@@ -138,5 +159,80 @@ function deselectAllGroups() {
 function submitFindingGroupsForm() {
     document.getElementById('findingGroupsForm').submit();
 }
+
+// Multi-analysis functions
+function updateAnalyzeButton() {
+    const checkboxes = document.querySelectorAll('.record-checkbox:checked');
+    const count = checkboxes.length;
+    const analyzeBtn = document.getElementById('analyzeCheckedBtn');
+    const countSpan = document.getElementById('selectedCount');
+
+    countSpan.textContent = count;
+    analyzeBtn.disabled = count === 0;
+
+    // Update the "select all" checkbox state
+    const allCheckboxes = document.querySelectorAll('.record-checkbox');
+    const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+
+    if (count === 0) {
+        selectAllCheckbox.indeterminate = false;
+        selectAllCheckbox.checked = false;
+    } else if (count === allCheckboxes.length) {
+        selectAllCheckbox.indeterminate = false;
+        selectAllCheckbox.checked = true;
+    } else {
+        selectAllCheckbox.indeterminate = true;
+    }
+}
+
+function selectAllRecords() {
+    const checkboxes = document.querySelectorAll('.record-checkbox');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = true;
+    });
+    updateAnalyzeButton();
+}
+
+function deselectAllRecords() {
+    const checkboxes = document.querySelectorAll('.record-checkbox');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = false;
+    });
+    updateAnalyzeButton();
+}
+
+function toggleAllRecords() {
+    const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+    const checkboxes = document.querySelectorAll('.record-checkbox');
+
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = selectAllCheckbox.checked;
+    });
+    updateAnalyzeButton();
+}
+
+// Add selected records to the form before submission
+document.getElementById('multiAnalysisForm').addEventListener('submit', function(e) {
+    const checkboxes = document.querySelectorAll('.record-checkbox:checked');
+
+    if (checkboxes.length === 0) {
+        e.preventDefault();
+        alert('Please select at least one record to analyze.');
+        return;
+    }
+
+    // Remove existing hidden inputs to avoid duplicates
+    const existingInputs = this.querySelectorAll('input[name="selected_records"]');
+    existingInputs.forEach(input => input.remove());
+
+    // Add selected record IDs to the form
+    checkboxes.forEach(checkbox => {
+        const hiddenInput = document.createElement('input');
+        hiddenInput.type = 'hidden';
+        hiddenInput.name = 'selected_records';
+        hiddenInput.value = checkbox.value;
+        this.appendChild(hiddenInput);
+    });
+});
 </script>
 {% endblock %}

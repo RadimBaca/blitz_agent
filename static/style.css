@@ -962,3 +962,215 @@ table tbody tr[style*="background-color: #e6f2ff"]:hover {
 .chat-message a:hover {
     color: #0056b3;
 }
+
+/* Multi-analysis controls */
+.multi-analysis-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 20px 0;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+}
+
+.selection-controls,
+.analysis-controls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.control-btn {
+    padding: 8px 16px;
+    margin: 0 5px;
+    font-size: 14px;
+    background-color: #e9ecef;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    color: #495057;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.control-btn:hover {
+    background-color: #dee2e6;
+    border-color: #adb5bd;
+    color: #212529;
+    transform: none;
+}
+
+.analyze-btn {
+    padding: 10px 20px;
+    font-size: 16px;
+    font-weight: 600;
+    background-color: #007bff;
+    color: white;
+    border: 1px solid #007bff;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.analyze-btn:hover:not(:disabled) {
+    background-color: #0056b3;
+    border-color: #004085;
+    transform: translateY(-1px);
+}
+
+.analyze-btn:disabled {
+    background-color: #6c757d;
+    border-color: #6c757d;
+    color: #fff;
+    cursor: not-allowed;
+    opacity: 0.65;
+    transform: none;
+}
+
+/* Checkbox column styling */
+table th:first-child,
+table td:first-child {
+    text-align: center;
+    vertical-align: middle;
+}
+
+.record-checkbox {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+#selectAllCheckbox {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+/* Flash message styling */
+.flashes {
+    list-style-type: none;
+    padding: 0;
+    margin: 20px 0;
+}
+
+.flashes li {
+    padding: 12px 20px;
+    margin: 10px 0;
+    border-radius: 4px;
+    font-weight: 500;
+}
+
+.flashes .success {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.flashes .error {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+.flashes .info {
+    background-color: #d1ecf1;
+    color: #0c5460;
+    border: 1px solid #bee5eb;
+}
+
+/* Multi-analysis controls */
+.multi-analysis-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 20px 0;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 5px;
+}
+
+.selection-controls {
+    display: flex;
+    gap: 10px;
+}
+
+.analysis-controls {
+    display: flex;
+    align-items: center;
+}
+
+.control-btn {
+    padding: 8px 16px;
+    margin: 0 5px;
+    background-color: #6c757d;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.control-btn:hover {
+    background-color: #5a6268;
+    transform: scale(1.02);
+}
+
+.analyze-btn {
+    padding: 10px 20px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+.analyze-btn:hover:not(:disabled) {
+    background-color: #0056b3;
+    transform: scale(1.05);
+}
+
+.analyze-btn:disabled {
+    background-color: #6c757d;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.analyze-btn:disabled:hover {
+    transform: none;
+}
+
+/* Record checkbox styling */
+.record-checkbox {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+/* Select all checkbox styling */
+#selectAllCheckbox {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+/* Table header with checkbox column */
+th:first-child {
+    text-align: center;
+    vertical-align: middle;
+}
+
+/* Table cell with checkbox */
+td:first-child {
+    text-align: center;
+    vertical-align: middle;
+    padding: 8px;
+}
+
+/* Ensure analyzed rows still show with background color */
+tr[style*="background-color: #e6f2ff"] td:first-child {
+    background-color: inherit;
+}
