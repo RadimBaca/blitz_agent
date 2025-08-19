@@ -573,6 +573,127 @@ def analyze(display_name, rec_id):
     except (pyodbc.Error, ValueError) as e:
         return get_database_error_message(e, "analysis", display_name)
 
+@app.route("/analyze_multiple/<display_name>", methods=["POST"])
+def analyze_multiple(display_name):
+    """Analyze multiple checked Blitz results at once"""
+    try:
+        procedure_name = get_procedure_name(display_name)
+
+        # Get selected record IDs from the form
+        selected_ids = request.form.getlist('selected_records')
+        if not selected_ids:
+            flash("No records selected for analysis.", "error")
+            return redirect(url_for('procedure', display_name=display_name))
+
+        # Convert to integers and validate
+        try:
+            selected_rec_ids = [int(rec_id) for rec_id in selected_ids]
+        except ValueError:
+            flash("Invalid record IDs selected.", "error")
+            return redirect(url_for('procedure', display_name=display_name))
+
+        # Track analysis statistics
+        analysis_stats = {
+            'total_records': len(selected_rec_ids),
+            'processed_records': 0,
+            'recommendations_generated': 0,
+            'errors': 0,
+            'start_time': dt_parser.now()
+        }
+
+        error_details = []
+
+        # Process each selected record
+        for rec_id in selected_rec_ids:
+            try:
+                record = dao.get_record(procedure_name, rec_id)
+                if not record:
+                    error_details.append(f"Record {rec_id} not found")
+                    analysis_stats['errors'] += 1
+                    continue
+
+                # Check if record already has analysis
+                chat_history = dao.get_chat_history(procedure_name, rec_id)
+                if chat_history:
+                    analysis_stats['processed_records'] += 1
+                    # Count existing recommendations for this record
+                    actual_record_id = getattr(record, PROCEDURES_ID_MAPPING.get(procedure_name, "pb_id"))
+                    existing_recs = dao.get_recommendations_for_record(procedure_name, actual_record_id)
+                    analysis_stats['recommendations_generated'] += len(existing_recs)
+                    continue
+
+                # Perform analysis similar to the single analyze route
+                print(f"Analyzing record {rec_id}: {record.finding}")
+                user_question = None
+
+                # Special handling for Over-Indexing BlitzIndex records
+                if (procedure_name == "sp_BlitzIndex" and
+                    record.finding and record.finding.startswith("Over-Indexing")):
+                    try:
+                        dao.process_over_indexing_analysis(record)
+                        db_indexes = dao.get_db_indexes(record.pbi_id)
+                        user_question = blitz_agent._load_over_indexing_prompt(
+                            record, db_indexes, db_conn.get_actual_db_name()
+                        )
+                    except (pyodbc.Error, ValueError, KeyError) as e:
+                        print(f"Error processing over-indexing analysis for record {rec_id}: {e}")
+
+                if user_question is None:
+                    # Standard analysis for other types
+                    raw_record_data = json.loads(record.raw_record) if record.raw_record else {}
+                    user_question = blitz_agent._load_prompt_for(
+                        procedure_name, raw_record_data, db_conn.get_actual_db_name()
+                    )
+
+                # For display purposes, show the formatted record data
+                record_dict = record.model_dump()
+                record_dict.pop("raw_record", None)
+                store_user_question = "\n".join(f"**{k}**: {v}" for k, v in record_dict.items())
+
+                # Get the actual record ID (pb_id, pbi_id, or pbc_id) for recommendations
+                actual_record_id = getattr(record, PROCEDURES_ID_MAPPING.get(procedure_name, "pb_id"))
+
+                # Execute analysis
+                result = blitz_agent.execute(
+                    procedure=procedure_name,
+                    record_id=actual_record_id,
+                    user_input=user_question,
+                    chat_history=[]
+                )
+
+                # Store chat history
+                chat_history = [("user", store_user_question), ("ai", result["output"])]
+                dao.store_chat_history(procedure_name, rec_id, chat_history)
+
+                analysis_stats['processed_records'] += 1
+
+                # Count recommendations generated for this record
+                new_recs = dao.get_recommendations_for_record(procedure_name, actual_record_id)
+                analysis_stats['recommendations_generated'] += len(new_recs)
+
+            except (pyodbc.Error, ValueError) as e:
+                error_details.append(f"Record {rec_id}: {str(e)}")
+                analysis_stats['errors'] += 1
+                app.logger.error(f"Multi-analysis failed for record {rec_id}: {str(e)}")
+
+        analysis_stats['end_time'] = dt_parser.now()
+        analysis_stats['processing_time'] = analysis_stats['end_time'] - analysis_stats['start_time']
+
+        # Create flash messages with statistics
+        if analysis_stats['processed_records'] > 0:
+            flash(f"Multi-analysis completed! Processed {analysis_stats['processed_records']} records, "
+                  f"generated {analysis_stats['recommendations_generated']} recommendations in "
+                  f"{analysis_stats['processing_time'].total_seconds():.1f} seconds.", "success")
+
+        if analysis_stats['errors'] > 0:
+            flash(f"{analysis_stats['errors']} errors occurred during analysis. "
+                  f"Details: {'; '.join(error_details[:3])}", "error")
+
+        return redirect(url_for('procedure', display_name=display_name))
+
+    except (pyodbc.Error, ValueError) as e:
+        return get_database_error_message(e, "multi-analysis", display_name)
+
 @app.route("/recommendations")
 def recommendations():
     """List all recommendations for the current database"""

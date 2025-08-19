@@ -78,10 +78,27 @@
             </form>
 
             {% if records %}
+                <!-- Multi-analysis controls -->
+                <div class="multi-analysis-controls">
+                    <div class="selection-controls">
+                        <button type="button" onclick="selectAllRecords()" class="control-btn">Select All</button>
+                        <button type="button" onclick="deselectAllRecords()" class="control-btn">Deselect All</button>
+                    </div>
+                    <div class="analysis-controls">
+                        <form method="POST" action="/analyze_multiple/{{ proc_name }}" id="multiAnalysisForm">
+                            <button type="submit" id="analyzeCheckedBtn" class="analyze-btn" disabled>
+                                Analyze Checked (<span id="selectedCount">0</span>)
+                            </button>
+                        </form>
+                    </div>
+                </div>
 
                 <table>
                     <thead>
                         <tr>
+                            <th style="width: 40px;">
+                                <input type="checkbox" id="selectAllCheckbox" onchange="toggleAllRecords()">
+                            </th>
                             <th>Query Text</th>
                             <th class="sortable">
                                 <a href="{{ url_for('procedure', display_name=proc_name, sort_by='avg_cpu_ms', sort_order='desc' if current_sort_by != 'avg_cpu_ms' or current_sort_order == 'asc' else 'asc') }}">
@@ -123,6 +140,14 @@
                     <tbody>
                         {% for rec in records %}
                             <tr {% if rec._analyzed %}style="background-color: #e6f2ff;"{% endif %}>
+                                <td>
+                                    {% if not rec._analyzed %}
+                                        <input type="checkbox" name="selected_records" value="{{ rec._rec_id }}"
+                                               class="record-checkbox" onchange="updateAnalyzeButton()">
+                                    {% else %}
+                                        <span class="analyzed-indicator" title="Already analyzed">✓</span>
+                                    {% endif %}
+                                </td>
                                 <td class="query-text">
                                     <div class="query-preview" title="{{ rec.query_text if rec.query_text else '' }}">
                                         {{ rec.query_text[:150] if rec.query_text else '' }}
@@ -329,8 +354,96 @@ function updateFilterAndSubmit() {
         document.getElementById('start_hour').value = '';
         document.getElementById('end_hour').value = '';
     }
-    document.getElementById('blitzCacheFilterForm').submit();
+    submitBlitzCacheForm();
 }
+
+function formatHour(hour) {
+    return String(hour).padStart(2, '0') + ':00';
+}
+
+function updateTimeFilterStatus(message) {
+    document.getElementById('timeFilterStatus').textContent = message;
+}
+
+// Multi-analysis functions
+function updateAnalyzeButton() {
+    const checkboxes = document.querySelectorAll('.record-checkbox:checked');
+    const count = checkboxes.length;
+    const analyzeBtn = document.getElementById('analyzeCheckedBtn');
+    const countSpan = document.getElementById('selectedCount');
+
+    countSpan.textContent = count;
+    analyzeBtn.disabled = count === 0;
+
+    // Update the "select all" checkbox state
+    const allCheckboxes = document.querySelectorAll('.record-checkbox');
+    const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+
+    if (count === 0) {
+        selectAllCheckbox.indeterminate = false;
+        selectAllCheckbox.checked = false;
+    } else if (count === allCheckboxes.length) {
+        selectAllCheckbox.indeterminate = false;
+        selectAllCheckbox.checked = true;
+    } else {
+        selectAllCheckbox.indeterminate = true;
+    }
+}
+
+function selectAllRecords() {
+    const checkboxes = document.querySelectorAll('.record-checkbox');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = true;
+    });
+    updateAnalyzeButton();
+}
+
+function deselectAllRecords() {
+    const checkboxes = document.querySelectorAll('.record-checkbox');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = false;
+    });
+    updateAnalyzeButton();
+}
+
+function toggleAllRecords() {
+    const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+    const checkboxes = document.querySelectorAll('.record-checkbox');
+
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = selectAllCheckbox.checked;
+    });
+    updateAnalyzeButton();
+}
+
+// Add selected records to the form before submission
+document.addEventListener('DOMContentLoaded', function() {
+    const multiAnalysisForm = document.getElementById('multiAnalysisForm');
+    if (multiAnalysisForm) {
+        multiAnalysisForm.addEventListener('submit', function(e) {
+            const checkboxes = document.querySelectorAll('.record-checkbox:checked');
+
+            if (checkboxes.length === 0) {
+                e.preventDefault();
+                alert('Please select at least one record to analyze.');
+                return;
+            }
+
+            // Remove existing hidden inputs to avoid duplicates
+            const existingInputs = this.querySelectorAll('input[name="selected_records"]');
+            existingInputs.forEach(input => input.remove());
+
+            // Add selected record IDs to the form
+            checkboxes.forEach(checkbox => {
+                const hiddenInput = document.createElement('input');
+                hiddenInput.type = 'hidden';
+                hiddenInput.name = 'selected_records';
+                hiddenInput.value = checkbox.value;
+                this.appendChild(hiddenInput);
+            });
+        });
+    }
+});
 
 function updateTimeFilterStatus(text) {
     document.getElementById('timeFilterStatus').textContent = text;
@@ -343,6 +456,7 @@ function formatHour(hour) {
 // Initialize hour selection on page load
 document.addEventListener('DOMContentLoaded', function() {
     initializeHourSelection();
+    updateAnalyzeButton();
 });
 </script>
 {% endblock %}
