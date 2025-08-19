@@ -509,11 +509,12 @@ def analyze(display_name, rec_id):
 
         chat_history = dao.get_chat_history(procedure_name, rec_id)
         if not chat_history:
-            # Special handling for Over-Indexing and Heap analysis BlitzIndex records
+            # Special handling for Over-Indexing, Redundant Indexes, and Heap analysis BlitzIndex records
             print(f"Procedure name: {procedure_name}, record.finding: {record.finding}")
             user_question = None
             if (procedure_name == "sp_BlitzIndex" and
                 record.finding and (record.finding.startswith("Over-Indexing") or
+                                  record.finding.startswith("Redundant Indexes") or
                                   "Heap with a Nonclustered Primary Key" in record.finding)):
 
                 try:
@@ -628,9 +629,10 @@ def analyze_multiple(display_name):
                 print(f"Analyzing record {rec_id}: {record.finding}")
                 user_question = None
 
-                # Special handling for Over-Indexing and Heap analysis BlitzIndex records
+                # Special handling for Over-Indexing, Redundant Indexes, and Heap analysis BlitzIndex records
                 if (procedure_name == "sp_BlitzIndex" and
                     record.finding and (record.finding.startswith("Over-Indexing") or
+                                      record.finding.startswith("Redundant Indexes") or
                                       record.finding.startswith("Indexes Worth Reviewing"))):
                     try:
                         dao.process_over_indexing_analysis(record)

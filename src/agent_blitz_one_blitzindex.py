@@ -319,7 +319,7 @@ def execute_more_info_query(more_info_sql: str) -> List[Dict[str, Any]]:
 def _load_specialized_prompt(record, db_indexes: List[DBIndexRecord], database: str) -> str:
     """
     Load specialized prompt templates based on the finding type and populate with index data.
-    Supports both over-indexing and heap analysis findings.
+    Supports over-indexing, redundant indexes, and heap analysis findings.
     """
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     version = int(os.getenv("VERSION", '1'))
@@ -327,6 +327,7 @@ def _load_specialized_prompt(record, db_indexes: List[DBIndexRecord], database: 
 
     # Determine which type of analysis this is
     is_over_indexing = finding.startswith("Over-Indexing")
+    is_redundant_indexes = finding.startswith("Redundant Indexes")
     is_heap_analysis = finding.startswith("Indexes Worth Reviewing")
 
     if version == 1:
@@ -336,7 +337,12 @@ def _load_specialized_prompt(record, db_indexes: List[DBIndexRecord], database: 
             with open(prompt_file, "r", encoding="utf-8") as f:
                 template = f.read()
         except (IOError, OSError) as e:
-            analysis_type = "over-indexing" if is_over_indexing else "heap table"
+            if is_over_indexing:
+                analysis_type = "over-indexing"
+            elif is_redundant_indexes:
+                analysis_type = "redundant indexes"
+            else:
+                analysis_type = "heap table"
             print(f"Error loading {analysis_type} prompt: {e}")
             return f"Analyze {analysis_type} issue for {finding} in database {database}"
 
@@ -347,6 +353,10 @@ def _load_specialized_prompt(record, db_indexes: List[DBIndexRecord], database: 
         if is_over_indexing:
             prompt_file = os.path.join(project_root, "db", "prompts", "over_indexing.txt")
             error_prefix = "over-indexing"
+            format_func = _format_index_data_for_prompt
+        elif is_redundant_indexes:
+            prompt_file = os.path.join(project_root, "db", "prompts", "redundant_indexes.txt")
+            error_prefix = "redundant indexes"
             format_func = _format_index_data_for_prompt
         elif is_heap_analysis:
             prompt_file = os.path.join(project_root, "db", "prompts", "heap_analysis.txt")
@@ -367,24 +377,13 @@ def _load_specialized_prompt(record, db_indexes: List[DBIndexRecord], database: 
 
         # Format the index data for the prompt
         index_analysis_data = format_func(record, db_indexes)
-        return template.format(index_analysis_data=index_analysis_data)
+        return template.format(
+            finding=finding,
+            index_analysis_data=index_analysis_data
+        )
 
     return "Version of the application is incorrectly set. Possible values are 1 or 2"
 
-
-# Backward compatibility functions
-def _load_over_indexing_prompt(record, db_indexes: List[DBIndexRecord], database: str) -> str:
-    """
-    Backward compatibility wrapper for over-indexing prompt loading.
-    """
-    return _load_specialized_prompt(record, db_indexes, database)
-
-
-def _load_heap_analysis_prompt(record, db_indexes: List[DBIndexRecord], database: str) -> str:
-    """
-    Backward compatibility wrapper for heap analysis prompt loading.
-    """
-    return _load_specialized_prompt(record, db_indexes, database)
 
 def _format_index_data_for_prompt(record, db_indexes: List[DBIndexRecord]) -> str:
     """
