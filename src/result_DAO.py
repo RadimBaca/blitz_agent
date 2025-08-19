@@ -1,12 +1,17 @@
 from typing import List, Optional, Tuple, Dict, Any, Union
 from .connection_DAO import _ensure_db, _get_conn
+from . import db_connection
 from .models import (
     BlitzRecord, BlitzIndexRecord, BlitzCacheRecord,
-    DBIndexRecord,
+    DBIndexRecord, Recommendation,
     PROCEDURE_MODELS, PROCEDURE_TABLE_NAMES,
-    PROCEDURE_CHAT_TABLE_NAMES, PROCEDURE_ID_FIELDS, COLUMN_MAPPING
+    PROCEDURE_CHAT_TABLE_NAMES, PROCEDURE_ID_FIELDS, COLUMN_MAPPING,
+    RECOMMENDATION_FK_MAPPING
 )
 import json
+import datetime
+import pyodbc
+import sqlparse
 
 # Initialize database on module import
 _ensure_db()
@@ -296,6 +301,21 @@ def delete_results(proc_name: str, db_id: int):
     conn = _get_conn()
     try:
         table_name = PROCEDURE_TABLE_NAMES[proc_name]
+        id_field = PROCEDURE_ID_FIELDS[proc_name]
+        recommendation_fk_field = RECOMMENDATION_FK_MAPPING[proc_name]
+
+        # First delete related recommendations
+        conn.execute(f"""
+            DELETE FROM Recommendation
+            WHERE {recommendation_fk_field} IN (
+                SELECT r.{id_field} FROM Procedure_call pc
+                JOIN Procedure_type pt ON pc.p_id = pt.p_id
+                JOIN {table_name} r ON r.pc_id = pc.pc_id
+                WHERE pt.procedure_name = ? AND pc.db_id = ?
+            )
+        """, (proc_name, db_id))
+
+        # Then delete the main procedure records
         conn.execute(f"""
             DELETE FROM {table_name}
             WHERE pc_id IN (
@@ -435,3 +455,374 @@ def get_db_indexes(pbi_id: int) -> List[DBIndexRecord]:
         return records
     finally:
         conn.close()
+
+
+def safe_pretty_json(record: dict) -> dict:
+    """Convert record values to safe JSON-serializable format"""
+    safe_record = {}
+    for k, v in record.items():
+        if k == "Query Text":
+            safe_record[k] = sqlparse.format(v, keyword_case='upper', output_format='sql', reindent=True)
+        elif isinstance(v, datetime.datetime):
+            safe_record[k] = v.isoformat()
+        elif isinstance(v, datetime.date):
+            safe_record[k] = v.isoformat()
+        elif isinstance(v, datetime.time):
+            safe_record[k] = v.isoformat()
+        elif isinstance(v, bytes):
+            # Convert bytes to hex string for display
+            safe_record[k] = v.hex() if v else ''
+        else:
+            safe_record[k] = v
+    return safe_record
+
+
+def process_over_indexing_analysis(record: BlitzIndexRecord) -> List[DBIndexRecord]:
+    """
+    Process over-indexing analysis for BlitzIndex records by executing the more_info SQL
+    and storing the detailed index data.
+
+    Args:
+        record: The BlitzIndexRecord containing the more_info SQL to execute
+        db_connection: Database connection object
+
+    Returns:
+        List of DBIndexRecord objects containing the processed index data
+
+    Raises:
+        pyodbc.Error: If database operation fails
+        ValueError: If data processing fails
+        KeyError: If required columns are missing
+    """
+    index_records = []
+
+    # Use SQL Server connection for executing more_info SQL
+    try:
+        with db_connection.get_connection() as sql_server_conn:
+            cursor = sql_server_conn.cursor()
+            cursor.execute(record.more_info)
+
+            # Skip to the result set with index data
+            while cursor.description is None:
+                if not cursor.nextset():
+                    break
+
+            if cursor.description:
+                columns = [desc[0] for desc in cursor.description]
+                rows = cursor.fetchall()
+
+                # Convert rows to list of DBIndexRecord objects and skip first row (Q1)
+                for i, row in enumerate(rows):
+                    if i == 0:  # Skip first row (Q1)
+                        continue
+                    row_dict = dict(zip(columns, row))
+                    # Serialize the data for storage
+                    serialized_row = safe_pretty_json(row_dict)
+
+                    # Map sp_BlitzIndex columns to DBIndexRecord fields
+                    mapped_data = {}
+
+                    # Map the columns from sp_BlitzIndex to DBIndexRecord fields
+                    column_mapping = {
+                        'Details: db_schema.table.index(indexid)': 'db_schema_object_indexid',
+                        'Definition: [Property] ColumnName {datatype maxbytes}': 'index_definition',
+                        'Secret Columns': 'secret_columns',
+                        'Fillfactor': 'fill_factor',
+                        'Usage Stats': 'index_usage_summary',
+                        'Op Stats': 'index_op_stats',
+                        'Size': 'index_size_summary',
+                        'Compression Type': 'partition_compression_detail',
+                        'Lock Waits': 'index_lock_wait_summary',
+                        'Referenced by FK?': 'is_referenced_by_foreign_key',
+                        'FK Covered by Index?': 'fks_covered_by_index',
+                        'Last User Seek': 'last_user_seek',
+                        'Last User Scan': 'last_user_scan',
+                        'Last User Lookup': 'last_user_lookup',
+                        'Last User Write': 'last_user_update',
+                        'Created': 'create_date',
+                        'Last Modified': 'modify_date',
+                        'Page Latch Wait Count': 'page_latch_wait_count',
+                        'Page Latch Wait Time (D:H:M:S)': 'page_latch_wait_time',
+                        'Page IO Latch Wait Count': 'page_io_latch_wait_count',
+                        'Page IO Latch Wait Time (D:H:M:S)': 'page_io_latch_wait_time',
+                        'Create TSQL': 'create_tsql',
+                        'Drop TSQL': 'drop_tsql'
+                    }
+
+                    for sp_column, db_field in column_mapping.items():
+                        if sp_column in serialized_row:
+                            value = serialized_row[sp_column]
+                            # Convert boolean strings to integers for FK fields
+                            if db_field == 'is_referenced_by_foreign_key' and isinstance(value, str):
+                                mapped_data[db_field] = 1 if value.lower() == 'true' else 0
+                            else:
+                                mapped_data[db_field] = value
+
+                    # Create DBIndexRecord object with mapped data
+                    index_record = DBIndexRecord(pbi_id=record.pbi_id, **mapped_data)
+                    index_records.append(index_record)
+
+                # Store the detailed index data
+                if index_records:
+                    store_db_indexes(index_records, record.pbi_id)
+
+    except (pyodbc.Error, ValueError, KeyError) as e:
+        raise e
+
+    return index_records
+
+
+# Recommendation methods
+def insert_recommendation(description: str, sql_command: Optional[str],
+                         pb_id: Optional[int] = None,
+                         pbi_id: Optional[int] = None,
+                         pbc_id: Optional[int] = None) -> int:
+    """Insert a new recommendation and return its ID"""
+    _ensure_db()
+    conn = _get_conn()
+
+    # Validate that exactly one foreign key is provided
+    foreign_keys = [pb_id, pbi_id, pbc_id]
+    non_null_keys = [key for key in foreign_keys if key is not None]
+
+    if len(non_null_keys) != 1:
+        raise ValueError("Exactly one of pb_id, pbi_id, or pbc_id must be provided")
+
+    try:
+        cur = conn.execute("""
+            INSERT INTO Recommendation (description, sql_command, pb_id, pbi_id, pbc_id)
+            VALUES (?, ?, ?, ?, ?)
+        """, (description, sql_command, pb_id, pbi_id, pbc_id))
+
+        # Get the last inserted ID
+        cur = conn.execute("SELECT last_insert_rowid()")
+        recommendation_id = cur.fetchone()[0]
+
+        conn.commit()
+        return recommendation_id
+
+    except pyodbc.Error as e:
+        conn.rollback()
+        raise e
+
+
+def get_recommendations(db_id: int, procedure: str) -> List[Recommendation]:
+    """Get all recommendations for a specific procedure and database"""
+    _ensure_db()
+    conn = _get_conn()
+
+    # Map procedure names to table columns and foreign key fields
+    procedure_mapping = {
+        "sp_Blitz": ("pb_id", "Procedure_blitz"),
+        "sp_BlitzIndex": ("pbi_id", "Procedure_blitzindex"),
+        "sp_BlitzCache": ("pbc_id", "Procedure_blitzcache")
+    }
+
+    if procedure not in procedure_mapping:
+        raise ValueError(f"Unsupported procedure: {procedure}")
+
+    fk_field, procedure_table = procedure_mapping[procedure]
+
+    try:
+        # Get procedure calls for this database
+        cur = conn.execute("""
+            SELECT pc_id FROM Procedure_call
+            WHERE db_id = ? AND p_id = (
+                SELECT p_id FROM Procedure_type WHERE procedure_name = ?
+            )
+        """, (db_id, procedure))
+
+        pc_ids = [row[0] for row in cur.fetchall()]
+
+        if not pc_ids:
+            return []
+
+        # Create placeholders for IN clause
+        placeholders = ','.join(['?'] * len(pc_ids))
+
+        # Get recommendations for this procedure and database
+        query = f"""
+            SELECT r.id_recom, r.description, r.sql_command,
+                   r.pb_id, r.pbi_id, r.pbc_id, r.created_at
+            FROM Recommendation r
+            JOIN {procedure_table} p ON r.{fk_field} = p.{fk_field}
+            WHERE p.pc_id IN ({placeholders})
+            ORDER BY r.created_at DESC
+        """
+
+        cur = conn.execute(query, pc_ids)
+        recommendations = []
+
+        for row in cur.fetchall():
+            recommendation = Recommendation(
+                id_recom=row[0],
+                description=row[1],
+                sql_command=row[2],
+                pb_id=row[3],
+                pbi_id=row[4],
+                pbc_id=row[5],
+                created_at=row[6]
+            )
+            recommendations.append(recommendation)
+
+        return recommendations
+
+    except pyodbc.Error as e:
+        raise e
+
+
+def get_all_recommendations(db_id: int) -> List[Recommendation]:
+    """Get all recommendations for a specific database across all procedures"""
+    _ensure_db()
+    conn = _get_conn()
+
+    try:
+        # Get procedure calls for this database
+        cur = conn.execute("SELECT pc_id FROM Procedure_call WHERE db_id = ?", (db_id,))
+        pc_ids = [row[0] for row in cur.fetchall()]
+
+        if not pc_ids:
+            return []
+
+        # Create placeholders for IN clause
+        placeholders = ','.join(['?'] * len(pc_ids))
+
+        # Get all recommendations for this database
+        query = f"""
+            SELECT r.id_recom, r.description, r.sql_command,
+                   r.pb_id, r.pbi_id, r.pbc_id, r.created_at
+            FROM Recommendation r
+            LEFT JOIN Procedure_blitz pb ON r.pb_id = pb.pb_id
+            LEFT JOIN Procedure_blitzindex pbi ON r.pbi_id = pbi.pbi_id
+            LEFT JOIN Procedure_blitzcache pbc ON r.pbc_id = pbc.pbc_id
+            WHERE pb.pc_id IN ({placeholders})
+               OR pbi.pc_id IN ({placeholders})
+               OR pbc.pc_id IN ({placeholders})
+            ORDER BY r.created_at DESC
+        """
+
+        # Triple the pc_ids for the three conditions
+        params = pc_ids + pc_ids + pc_ids
+        cur = conn.execute(query, params)
+
+        recommendations = []
+        for row in cur.fetchall():
+            recommendation = Recommendation(
+                id_recom=row[0],
+                description=row[1],
+                sql_command=row[2],
+                pb_id=row[3],
+                pbi_id=row[4],
+                pbc_id=row[5],
+                created_at=row[6]
+            )
+            recommendations.append(recommendation)
+
+        return recommendations
+
+    except pyodbc.Error as e:
+        raise e
+
+
+def get_recommendation(db_id: int, id_recom: int) -> Optional[Recommendation]:
+    """Get a specific recommendation by ID for a database"""
+    _ensure_db()
+    conn = _get_conn()
+
+    try:
+        # Get procedure calls for this database
+        cur = conn.execute("SELECT pc_id FROM Procedure_call WHERE db_id = ?", (db_id,))
+        pc_ids = [row[0] for row in cur.fetchall()]
+
+        if not pc_ids:
+            return None
+
+        # Create placeholders for IN clause
+        placeholders = ','.join(['?'] * len(pc_ids))
+
+        # Get the specific recommendation
+        query = f"""
+            SELECT r.id_recom, r.description, r.sql_command,
+                   r.pb_id, r.pbi_id, r.pbc_id, r.created_at,
+                   pb.procedure_order as pb_procedure_order,
+                   pbi.procedure_order as pbi_procedure_order,
+                   pbc.procedure_order as pbc_procedure_order
+            FROM Recommendation r
+            LEFT JOIN Procedure_blitz pb ON r.pb_id = pb.pb_id
+            LEFT JOIN Procedure_blitzindex pbi ON r.pbi_id = pbi.pbi_id
+            LEFT JOIN Procedure_blitzcache pbc ON r.pbc_id = pbc.pbc_id
+            WHERE r.id_recom = ?
+              AND (pb.pc_id IN ({placeholders})
+                   OR pbi.pc_id IN ({placeholders})
+                   OR pbc.pc_id IN ({placeholders}))
+        """
+
+        # Create parameters: id_recom + triple pc_ids
+        params = [id_recom] + pc_ids + pc_ids + pc_ids
+        cur = conn.execute(query, params)
+
+        row = cur.fetchone()
+        if row:
+            return Recommendation(
+                id_recom=row[0],
+                description=row[1],
+                sql_command=row[2],
+                pb_id=row[3],
+                pbi_id=row[4],
+                pbc_id=row[5],
+                created_at=row[6],
+                pb_procedure_order=row[7],
+                pbi_procedure_order=row[8],
+                pbc_procedure_order=row[9]
+            )
+
+        return None
+
+    except pyodbc.Error as e:
+        raise e
+
+
+def get_recommendations_for_record(procedure_name: str, record_id: int) -> List[Recommendation]:
+    """Get all recommendations for a specific record"""
+    _ensure_db()
+    conn = _get_conn()
+
+    # Map procedure names to foreign key fields
+    fk_mapping = {
+        "sp_Blitz": "pb_id",
+        "sp_BlitzIndex": "pbi_id",
+        "sp_BlitzCache": "pbc_id"
+    }
+
+    if procedure_name not in fk_mapping:
+        raise ValueError(f"Unsupported procedure: {procedure_name}")
+
+    fk_field = fk_mapping[procedure_name]
+
+    try:
+        query = f"""
+            SELECT id_recom, description, sql_command, pb_id, pbi_id, pbc_id, created_at
+            FROM Recommendation
+            WHERE {fk_field} = ?
+            ORDER BY created_at DESC
+        """
+
+        cur = conn.execute(query, (record_id,))
+        recommendations = []
+
+        for row in cur.fetchall():
+            recommendation = Recommendation(
+                id_recom=row[0],
+                description=row[1],
+                sql_command=row[2],
+                pb_id=row[3],
+                pbi_id=row[4],
+                pbc_id=row[5],
+                created_at=row[6]
+            )
+            recommendations.append(recommendation)
+
+        return recommendations
+
+    except pyodbc.Error as e:
+        raise e

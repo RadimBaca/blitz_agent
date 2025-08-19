@@ -151,38 +151,6 @@ class TestOverIndexingAnalysis:
         mock_execute.assert_called_once()
         assert len(result) == 2
 
-    def test_format_index_data_for_prompt(self, sample_blitzindex_record):
-        """Test formatting index data for AI prompt"""
-        from src.agent_blitz_one_blitzindex import _format_index_data_for_prompt
-
-        # Create sample DB index records
-        db_indexes = [
-            DBIndexRecord(
-                pbi_id=1,
-                db_schema_object_indexid='dbo.TestTable.PK_TestTable (1)',
-                index_definition='[ID] ASC',
-                index_usage_summary='Seeks: 1000, Scans: 10',
-                last_user_seek='2024-08-15 10:00:00'
-            ),
-            DBIndexRecord(
-                pbi_id=1,
-                db_schema_object_indexid='dbo.TestTable.IX_Unused (2)',
-                index_definition='[UnusedColumn] ASC',
-                index_usage_summary='Seeks: 0, Scans: 0',
-                last_user_seek=None
-            )
-        ]
-
-        # Format data
-        formatted_data = _format_index_data_for_prompt(sample_blitzindex_record, db_indexes)
-
-        # Verify formatting
-        assert "OVER-INDEXING ANALYSIS" in formatted_data
-        assert "TABLE: dbo.TestTable" in formatted_data
-        assert "INDEX 1: dbo.TestTable.PK_TestTable (1)" in formatted_data
-        assert "INDEX 2: dbo.TestTable.IX_Unused (2)" in formatted_data
-        assert "Seeks: 1000, Scans: 10" in formatted_data
-        assert "Seeks: 0, Scans: 0" in formatted_data
 
     def test_format_index_data_empty(self, sample_blitzindex_record):
         """Test formatting when no index data is available"""

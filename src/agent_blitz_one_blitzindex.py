@@ -16,6 +16,7 @@ from langchain_community.vectorstores import Chroma
 # Import the centralized connection function
 from .db_connection import get_connection
 from .models import DBIndexRecord
+from . import result_DAO as dao
 
 # Always resolve vector store relative to project root, not src/
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -90,6 +91,67 @@ def query_knowledge_base(query: str) -> str:
     return vector_result
 
 
+# Global context for current analysis session
+_current_context = {"procedure": None, "record_id": None}
+
+
+def set_analysis_context(procedure: str, record_id: int):
+    """Set the current analysis context for tools"""
+    _current_context["procedure"] = procedure
+    _current_context["record_id"] = record_id
+
+
+@tool
+def add_recommendation(description: str, sql_command: str = None) -> str:
+    """
+    Add a recommendation based on the current analysis. Use this when you have identified
+    a specific actionable recommendation that should be stored and referenced later.
+
+    Args:
+        description: Clear description of the recommendation
+        sql_command: Optional SQL command to implement the recommendation
+
+    Returns:
+        Link to view the recommendation or error message
+    """
+    try:
+        # Get current context
+        procedure = _current_context.get("procedure")
+        record_id = _current_context.get("record_id")
+
+        if not procedure or record_id is None:
+            return "Error: No analysis context available. Cannot create recommendation."
+
+        # Map procedure to foreign key field
+        fk_mapping = {
+            "sp_Blitz": "pb_id",
+            "sp_BlitzIndex": "pbi_id",
+            "sp_BlitzCache": "pbc_id"
+        }
+
+        if procedure not in fk_mapping:
+            return f"Error: Unsupported procedure '{procedure}' for recommendations."
+
+        fk_field = fk_mapping[procedure]
+        kwargs = {fk_field: record_id}
+
+        # Insert recommendation
+        recommendation_id = dao.insert_recommendation(
+            description=description,
+            sql_command=sql_command,
+            **kwargs
+        )
+
+        # Return link to recommendation
+        app_url = os.getenv("APP_URL", "http://localhost:5001")
+        recommendation_link = f"{app_url}/recommendation/{recommendation_id}"
+
+        return f"Recommendation created successfully! View it here: {recommendation_link}"
+
+    except Exception as e:
+        return f"Error creating recommendation: {str(e)}"
+
+
 prompt_template = ChatPromptTemplate.from_messages([
     ("system", "Odpovez na otazku jak nejlepe umis."),
     MessagesPlaceholder(variable_name="chat_history"),
@@ -97,13 +159,38 @@ prompt_template = ChatPromptTemplate.from_messages([
     MessagesPlaceholder(variable_name="agent_scratchpad")
 ])
 
-tools = [run_sqlserver_query_as_csv, query_knowledge_base]
+tools = [run_sqlserver_query_as_csv, query_knowledge_base, add_recommendation]
 
 llm = ChatOpenAI(model_name="gpt-4o-mini", temperature=0)
 
 # Agent
 agent = create_tool_calling_agent(llm=llm, tools=tools, prompt=prompt_template)
 agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True, max_iterations=2000)
+
+
+def execute(procedure: str, record_id: int, user_input: str, chat_history: list) -> dict:
+    """
+    Execute agent analysis with proper context for recommendations.
+
+    Args:
+        procedure: The procedure name (e.g., 'sp_Blitz', 'sp_BlitzIndex', 'sp_BlitzCache')
+        record_id: The record ID for the current analysis
+        user_input: The user's input/question
+        chat_history: The chat history for context
+
+    Returns:
+        The agent execution result
+    """
+    # Set context for tools
+    set_analysis_context(procedure, record_id)
+
+    # Execute agent
+    result = agent_executor.invoke({
+        "input": user_input,
+        "chat_history": chat_history
+    })
+
+    return result
 
 
 

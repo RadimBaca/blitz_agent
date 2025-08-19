@@ -346,3 +346,183 @@ def test_analyzed_flag_functionality():
 
     assert retrieved_chat_0 == chat_history, "Chat history for record 0 should match what was stored"
     assert retrieved_chat_1 == chat_history_2, "Chat history for record 1 should match what was stored"
+
+
+def test_recommendation_crud():
+    """Test CRUD operations for recommendations"""
+    # Store test records first
+    blitz_records = [
+        {
+            "Priority": 1,
+            "Finding": "High CPU Usage",
+            "Details": "CPU is consistently over 90%"
+        }
+    ]
+    blitzindex_records = [
+        {
+            "Priority": 2,
+            "Finding": "Missing Index",
+            "Details: schema.table.index(indexid)": "dbo.Users.missing_index"
+        }
+    ]
+
+    dao.store_records("sp_Blitz", blitz_records, db_id=1)
+    dao.store_records("sp_BlitzIndex", blitzindex_records, db_id=1)
+
+    # Get record IDs
+    blitz_record = dao.get_all_records("sp_Blitz", db_id=1)[0]
+    blitzindex_record = dao.get_all_records("sp_BlitzIndex", db_id=1)[0]
+
+    # Test insert recommendation for Blitz record
+    rec_id_1 = dao.insert_recommendation(
+        description="Add CPU monitoring alerts",
+        sql_command="ALTER SERVER CONFIGURATION SET PROCESS AFFINITY CPU = AUTO;",
+        pb_id=blitz_record.pb_id
+    )
+    assert rec_id_1 > 0, "Should return a valid recommendation ID"
+
+    # Test insert recommendation for BlitzIndex record
+    rec_id_2 = dao.insert_recommendation(
+        description="Create missing index on Users table",
+        sql_command="CREATE INDEX IX_Users_Email ON dbo.Users(Email);",
+        pbi_id=blitzindex_record.pbi_id
+    )
+    assert rec_id_2 > 0, "Should return a valid recommendation ID"
+
+    # Test validation - should fail with multiple foreign keys
+    with pytest.raises(ValueError, match="Exactly one of pb_id, pbi_id, or pbc_id must be provided"):
+        dao.insert_recommendation(
+            description="Invalid recommendation",
+            sql_command=None,
+            pb_id=blitz_record.pb_id,
+            pbi_id=blitzindex_record.pbi_id
+        )
+
+    # Test validation - should fail with no foreign keys
+    with pytest.raises(ValueError, match="Exactly one of pb_id, pbi_id, or pbc_id must be provided"):
+        dao.insert_recommendation(
+            description="Invalid recommendation",
+            sql_command=None
+        )
+
+    # Test get_recommendations for specific procedure
+    blitz_recommendations = dao.get_recommendations(db_id=1, procedure="sp_Blitz")
+    assert len(blitz_recommendations) == 1
+    assert blitz_recommendations[0].description == "Add CPU monitoring alerts"
+    assert blitz_recommendations[0].pb_id == blitz_record.pb_id
+
+    blitzindex_recommendations = dao.get_recommendations(db_id=1, procedure="sp_BlitzIndex")
+    assert len(blitzindex_recommendations) == 1
+    assert blitzindex_recommendations[0].description == "Create missing index on Users table"
+    assert blitzindex_recommendations[0].pbi_id == blitzindex_record.pbi_id
+
+    # Test get_all_recommendations
+    all_recommendations = dao.get_all_recommendations(db_id=1)
+    assert len(all_recommendations) == 2
+
+    # Test get_recommendation by ID
+    specific_rec = dao.get_recommendation(db_id=1, id_recom=rec_id_1)
+    assert specific_rec is not None
+    assert specific_rec.description == "Add CPU monitoring alerts"
+    assert specific_rec.pb_id == blitz_record.pb_id
+
+    # Test get_recommendations_for_record
+    record_recommendations = dao.get_recommendations_for_record("sp_Blitz", blitz_record.pb_id)
+    assert len(record_recommendations) == 1
+    assert record_recommendations[0].description == "Add CPU monitoring alerts"
+
+    # Test with non-existent record
+    non_existent = dao.get_recommendation(db_id=1, id_recom=999)
+    assert non_existent is None
+
+    # Test with different database (should return empty)
+    other_db_recommendations = dao.get_all_recommendations(db_id=2)
+    assert len(other_db_recommendations) == 0
+
+
+def test_recommendation_multiple_databases():
+    """Test that recommendations are properly isolated by database"""
+    # Store records in different databases
+    blitz_records = [{"Priority": 1, "Finding": "Test Finding", "Details": "Test Details"}]
+
+    dao.store_records("sp_Blitz", blitz_records, db_id=1)
+    dao.store_records("sp_Blitz", blitz_records, db_id=2)
+
+    # Get records from both databases
+    db1_records = dao.get_all_records("sp_Blitz", db_id=1)
+    db2_records = dao.get_all_records("sp_Blitz", db_id=2)
+
+    # Add recommendations to each database
+    dao.insert_recommendation(
+        description="Recommendation for DB1",
+        sql_command="SELECT 1;",
+        pb_id=db1_records[0].pb_id
+    )
+
+    dao.insert_recommendation(
+        description="Recommendation for DB2",
+        sql_command="SELECT 2;",
+        pb_id=db2_records[0].pb_id
+    )
+
+    # Verify isolation
+    db1_recommendations = dao.get_all_recommendations(db_id=1)
+    db2_recommendations = dao.get_all_recommendations(db_id=2)
+
+    assert len(db1_recommendations) == 1
+    assert len(db2_recommendations) == 1
+    assert db1_recommendations[0].description == "Recommendation for DB1"
+    assert db2_recommendations[0].description == "Recommendation for DB2"
+
+
+def test_delete_results_also_deletes_recommendations():
+    """Test that delete_results also deletes related recommendations"""
+    # Store some BlitzIndex records
+    blitzindex_records = [
+        {
+            "Finding": "Missing Index",
+            "Details: schema.table.index(indexid)": "dbo.Users.IX_Users_Email(1)",
+            "Priority": 100,
+            "More Info": "SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID('dbo.Users')"
+        },
+        {
+            "Finding": "Unused Index",
+            "Details: schema.table.index(indexid)": "dbo.Orders.IX_Orders_Date(2)",
+            "Priority": 50,
+            "More Info": "SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID('dbo.Orders')"
+        }
+    ]
+
+    dao.store_records("sp_BlitzIndex", blitzindex_records, db_id=1)
+
+    # Get the stored records to get their IDs
+    records = dao.get_all_records("sp_BlitzIndex", db_id=1)
+    assert len(records) == 2
+
+    # Create recommendations for these records
+    dao.insert_recommendation(
+        description="Fix missing index on Users table",
+        sql_command="CREATE INDEX IX_Users_Email ON dbo.Users(Email)",
+        pbi_id=records[0].pbi_id
+    )
+
+    dao.insert_recommendation(
+        description="Drop unused index on Orders table",
+        sql_command="DROP INDEX IX_Orders_Date ON dbo.Orders",
+        pbi_id=records[1].pbi_id
+    )
+
+    # Verify recommendations exist
+    recommendations = dao.get_all_recommendations(db_id=1)
+    assert len(recommendations) == 2
+
+    # Delete the results - this should also delete the recommendations
+    dao.delete_results("sp_BlitzIndex", db_id=1)
+
+    # Verify recommendations were deleted
+    recommendations_after = dao.get_all_recommendations(db_id=1)
+    assert len(recommendations_after) == 0
+
+    # Verify records were deleted
+    records_after = dao.get_all_records("sp_BlitzIndex", db_id=1)
+    assert len(records_after) == 0

@@ -445,9 +445,14 @@ table tbody tr[style*="background-color: #e6f2ff"]:hover {
 
 .chat-message strong {
     color: #333;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+/* Style for chat labels like "AI:" and "You:" which should be on their own line */
+.chat-message > strong:first-child {
     display: block;
     margin-bottom: 8px;
-    font-size: 14px;
 }
 
 .chat-message.ai strong {
@@ -864,4 +869,96 @@ table tbody tr[style*="background-color: #e6f2ff"]:hover {
 
 .dropdown:hover .dropdown-content {
     display: block;
+}
+
+/* Custom markdown formatting for chat messages */
+.chat-message h1,
+.chat-message h2,
+.chat-message h3,
+.chat-message h4,
+.chat-message h5,
+.chat-message h6 {
+    border: none;
+    background: none;
+    padding: 0;
+    text-align: left;
+    border-radius: 0;
+}
+
+.chat-message h1 {
+    font-size: 1.5em;
+    color: #333;
+    margin: 15px 0 10px 0;
+    font-weight: bold;
+    border-bottom: 2px solid #007BFF;
+    padding-bottom: 5px;
+}
+
+.chat-message h2 {
+    font-size: 1.3em;
+    color: #444;
+    margin: 12px 0 8px 0;
+    font-weight: bold;
+    border-bottom: 1px solid #666;
+    padding-bottom: 3px;
+}
+
+.chat-message h3 {
+    font-size: 1.2em;
+    color: #555;
+    margin: 10px 0 6px 0;
+    font-weight: bold;
+}
+
+.chat-message h4 {
+    font-size: 1.1em;
+    color: #666;
+    margin: 8px 0 5px 0;
+    font-weight: bold;
+}
+
+.chat-message ul,
+.chat-message ol {
+    margin: 10px 0;
+    padding-left: 20px;
+}
+
+.chat-message li {
+    margin: 5px 0;
+    line-height: 1.4;
+}
+
+.chat-message code {
+    background-color: #f4f4f4;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    padding: 2px 4px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9em;
+}
+
+.chat-message pre {
+    background-color: #f8f8f8;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    padding: 10px;
+    overflow-x: auto;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9em;
+    margin: 10px 0;
+}
+
+.chat-message pre code {
+    background: none;
+    border: none;
+    padding: 0;
+}
+
+.chat-message a {
+    color: #007BFF;
+    text-decoration: underline;
+}
+
+.chat-message a:hover {
+    color: #0056b3;
 }

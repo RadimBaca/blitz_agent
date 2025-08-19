@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}{{ proc_name }}{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1>{{ proc_name }}</h1>
+
+    {% if recommendations %}
+        <p>Found {{ recommendations|length }} recommendation(s).</p>
+
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Description</th>
+                        <th>Has SQL Command</th>
+                        <th>Related Procedure</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for rec in recommendations %}
+                    <tr>
+                        <td>{{ rec.id_recom }}</td>
+                        <td>{{ rec.description[:100] }}{% if rec.description|length > 100 %}...{% endif %}</td>
+                        <td>{% if rec.sql_command %}Yes{% else %}No{% endif %}</td>
+                        <td>
+                            {% if rec.pb_id %}Blitz{% endif %}
+                            {% if rec.pbi_id %}Blitz Index{% endif %}
+                            {% if rec.pbc_id %}Blitz Cache{% endif %}
+                        </td>
+                        <td>{{ rec.created_at or 'N/A' }}</td>
+                        <td>
+                            <a href="{{ url_for('recommendation_detail', id_recom=rec.id_recom) }}" class="btn btn-primary btn-sm">View</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="alert alert-info">
+            <h4>No Recommendations Found</h4>
+            <p>No recommendations have been created for this database yet. Recommendations are automatically created during analysis when specific actionable improvements are identified.</p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

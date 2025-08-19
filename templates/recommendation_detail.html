@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}{{ proc_name }}{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1>{{ proc_name }}</h1>
+
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h3>Recommendation Details</h3>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3"><strong>ID:</strong></div>
+                        <div class="col-md-9">{{ recommendation.id_recom }}</div>
+                    </div>
+                    <hr>
+
+                    <div class="row">
+                        <div class="col-md-3"><strong>Description:</strong></div>
+                        <div class="col-md-9">{{ recommendation.description | markdown }}</div>
+                    </div>
+                    <hr>
+
+                    {% if recommendation.sql_command %}
+                    <div class="row">
+                        <div class="col-md-3"><strong>SQL Command:</strong></div>
+                        <div class="col-md-9">
+                            <pre><code>{{ recommendation.sql_command }}</code></pre>
+                        </div>
+                    </div>
+                    <hr>
+                    {% endif %}
+
+                    <div class="row">
+                        <div class="col-md-3"><strong>Related Procedure:</strong></div>
+                        <div class="col-md-9">
+                            {% if recommendation.pb_id %}
+                                <a href="{{ url_for('analyze', display_name='Blitz', rec_id=recommendation.pb_procedure_order) }}">Blitz</a> (Record ID: {{ recommendation.pb_id }})
+                            {% elif recommendation.pbi_id %}
+                                <a href="{{ url_for('analyze', display_name='Blitz Index', rec_id=recommendation.pbi_procedure_order) }}">Blitz Index</a> (Record ID: {{ recommendation.pbi_id }})
+                            {% elif recommendation.pbc_id %}
+                                <a href="{{ url_for('analyze', display_name='Blitz Cache', rec_id=recommendation.pbc_procedure_order) }}">Blitz Cache</a> (Record ID: {{ recommendation.pbc_id }})
+                            {% endif %}
+                        </div>
+                    </div>
+                    <hr>
+
+                    <div class="row">
+                        <div class="col-md-3"><strong>Created:</strong></div>
+                        <div class="col-md-9">{{ recommendation.created_at or 'N/A' }}</div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <a href="{{ url_for('recommendations') }}" class="btn btn-secondary">← Back to Recommendations</a>
+                    {% if recommendation.pb_id %}
+                        <a href="{{ url_for('analyze', display_name='Blitz', rec_id=recommendation.pb_procedure_order) }}" class="btn btn-primary">View Related Blitz Analysis</a>
+                    {% elif recommendation.pbi_id %}
+                        <a href="{{ url_for('analyze', display_name='Blitz Index', rec_id=recommendation.pbi_procedure_order) }}" class="btn btn-primary">View Related Blitz Index Analysis</a>
+                    {% elif recommendation.pbc_id %}
+                        <a href="{{ url_for('analyze', display_name='Blitz Cache', rec_id=recommendation.pbc_procedure_order) }}" class="btn btn-primary">View Related Blitz Cache Analysis</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -106,6 +106,22 @@ class DBIndexRecord(BaseModel):
         from_attributes = True
 
 
+class Recommendation(BaseModel):
+    id_recom: Optional[int] = None
+    description: str
+    sql_command: Optional[str] = None
+    pb_id: Optional[int] = None
+    pbi_id: Optional[int] = None
+    pbc_id: Optional[int] = None
+    created_at: Optional[str] = None
+    pb_procedure_order: Optional[int] = None
+    pbi_procedure_order: Optional[int] = None
+    pbc_procedure_order: Optional[int] = None
+
+    class Config:
+        from_attributes = True
+
+
 
 # Mapping of procedure names to their corresponding models and display keys
 PROCEDURE_MODELS = {
@@ -136,6 +152,13 @@ PROCEDURE_ID_FIELDS = {
     "sp_Blitz": "pb_id",
     "sp_BlitzIndex": "pbi_id",
     "sp_BlitzCache": "pbc_id",
+}
+
+# Map procedure names to recommendation foreign key fields
+RECOMMENDATION_FK_MAPPING = {
+    "sp_Blitz": "pb_id",
+    "sp_BlitzIndex": "pbi_id",
+    "sp_BlitzCache": "pbc_id"
 }
 
 # Mapping from raw column names to model field names
