@@ -676,7 +676,6 @@ def analyze_multiple(display_name):
                 analysis_stats['errors'] += 1
                 app.logger.error(f"Multi-analysis failed for record {rec_id}: {str(e)}")
 
-        # Calculate processing time
         analysis_stats['end_time'] = dt_parser.now()
         analysis_stats['processing_time'] = analysis_stats['end_time'] - analysis_stats['start_time']
 
