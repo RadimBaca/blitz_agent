@@ -133,7 +133,11 @@ class TestAppIntegration:
             if init_aw:
                 # Call the create_over_indexing_scenario function directly
                 init_aw.create_over_indexing_scenario()
-                print("✓ Adventure Works initialization completed")
+                print("✓ Adventure Works over-indexing initialization completed")
+
+                # Call the create_heap_table_scenario function
+                init_aw.create_heap_table_scenario()
+                print("✓ Adventure Works heap table conversion completed")
             else:
                 print("⚠ Adventure Works module not available - skipping initialization")
         except (ConnectionError, ImportError, AttributeError) as e:
