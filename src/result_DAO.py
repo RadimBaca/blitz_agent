@@ -689,7 +689,7 @@ def get_all_recommendations(db_id: int) -> List[Recommendation]:
 
         # Get all recommendations for this database
         query = f"""
-            SELECT DISTINCT r.id_recom, r.description, r.sql_command,
+            SELECT r.id_recom, r.description, r.sql_command,
                    r.pb_id, r.pbi_id, r.pbc_id, r.created_at
             FROM Recommendation r
             LEFT JOIN Procedure_blitz pb ON r.pb_id = pb.pb_id
@@ -743,7 +743,10 @@ def get_recommendation(db_id: int, id_recom: int) -> Optional[Recommendation]:
         # Get the specific recommendation
         query = f"""
             SELECT r.id_recom, r.description, r.sql_command,
-                   r.pb_id, r.pbi_id, r.pbc_id, r.created_at
+                   r.pb_id, r.pbi_id, r.pbc_id, r.created_at,
+                   pb.procedure_order as pb_procedure_order,
+                   pbi.procedure_order as pbi_procedure_order,
+                   pbc.procedure_order as pbc_procedure_order
             FROM Recommendation r
             LEFT JOIN Procedure_blitz pb ON r.pb_id = pb.pb_id
             LEFT JOIN Procedure_blitzindex pbi ON r.pbi_id = pbi.pbi_id
@@ -767,7 +770,10 @@ def get_recommendation(db_id: int, id_recom: int) -> Optional[Recommendation]:
                 pb_id=row[3],
                 pbi_id=row[4],
                 pbc_id=row[5],
-                created_at=row[6]
+                created_at=row[6],
+                pb_procedure_order=row[7],
+                pbi_procedure_order=row[8],
+                pbc_procedure_order=row[9]
             )
 
         return None

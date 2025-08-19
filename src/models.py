@@ -114,6 +114,9 @@ class Recommendation(BaseModel):
     pbi_id: Optional[int] = None
     pbc_id: Optional[int] = None
     created_at: Optional[str] = None
+    pb_procedure_order: Optional[int] = None
+    pbi_procedure_order: Optional[int] = None
+    pbc_procedure_order: Optional[int] = None
 
     class Config:
         from_attributes = True
