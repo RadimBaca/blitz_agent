@@ -327,7 +327,7 @@ def _load_specialized_prompt(record, db_indexes: List[DBIndexRecord], database: 
 
     # Determine which type of analysis this is
     is_over_indexing = finding.startswith("Over-Indexing")
-    is_heap_analysis = "Heap with a Nonclustered Primary Key" in finding
+    is_heap_analysis = finding.startswith("Indexes Worth Reviewing")
 
     if version == 1:
         # Use the generic prompt for version 1

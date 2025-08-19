@@ -631,7 +631,7 @@ def analyze_multiple(display_name):
                 # Special handling for Over-Indexing and Heap analysis BlitzIndex records
                 if (procedure_name == "sp_BlitzIndex" and
                     record.finding and (record.finding.startswith("Over-Indexing") or
-                                      "Heap with a Nonclustered Primary Key" in record.finding)):
+                                      record.finding.startswith("Indexes Worth Reviewing"))):
                     try:
                         dao.process_over_indexing_analysis(record)
                         db_indexes = dao.get_db_indexes(record.pbi_id)
