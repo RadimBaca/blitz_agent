@@ -27,7 +27,7 @@ except ImportError:
 @pytest.fixture
 def server_health_check():
     """Check if server is running on expected port"""
-    app_url = os.getenv('APP_URL', 'http://localhost:5000')
+    app_url = os.getenv('APP_URL', 'http://localhost:5001')
 
     try:
         response = requests.get(f"{app_url}/", timeout=5)

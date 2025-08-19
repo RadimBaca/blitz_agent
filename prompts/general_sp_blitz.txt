@@ -20,8 +20,7 @@ Your task:
 Your output must:
 - Be in Markdown format
 - Include a **clear explanation** of the root cause and impact
-- Include **specific runnable SQL commands** using simple backticks: `SQL COMMAND HERE`
-- Do NOT use ``` ```sql ``` code blocks - use simple backticks instead
+- Include **specific runnable SQL commands** (in `sql` code blocks), formatted with each clause on its own line
 - Provide enough context and justification for a DBA to confidently apply the recommendation
 
 **When to create a recommendation:**
