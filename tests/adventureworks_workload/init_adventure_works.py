@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 """
-AdventureWorks2019 Over-Indexing Simulation Script
-This script creates strategic indexes on Production.Product table to simulate over-indexing scenarios.
+AdventureWorks2019 Over-Indexing and Heap Table Simulation Script
 
+This script provides two main functionalities:
+1. Creates strategic indexes on Production.Product table to simulate over-indexing scenarios
+2. Converts Sales.SalesOrderDetail table to heap table by dropping clustered index
+
+Production.Product Over-Indexing:
 Existing indexes on Production.Product:
 - PK_Product_ProductID (ProductID) - Primary Key
 - AK_Product_Name (Name) - Unique
@@ -21,6 +25,11 @@ Set 2:
 6. IX_Product_Color_SafetyStock_ReorderPoint - Compound index for inventory queries
 7. IX_Product_Color_Included - Covering index for color-based searches
 8. IX_Product_SafetyStockLevel - Made redundant by index #6
+
+Sales.SalesOrderDetail Heap Conversion:
+- Creates non-clustered index with same key as existing clustered index
+- Drops the clustered index to convert table to heap
+- Provides performance degradation scenario for heap table analysis
 """
 
 import os
@@ -201,109 +210,188 @@ def create_over_indexing_scenario():
         print(f"Unexpected error: {e}")
         raise
 
-def verify_over_indexing_scenario():
-    """Verify the over-indexing scenario by showing index usage statistics"""
+
+def is_heap_table(cursor, table_name='Sales.SalesOrderDetail'):
+    """Check if a table is a heap (has no clustered index)"""
+    check_query = """
+    SELECT COUNT(*)
+    FROM sys.indexes i
+    INNER JOIN sys.objects o ON i.object_id = o.object_id
+    INNER JOIN sys.schemas s ON o.schema_id = s.schema_id
+    WHERE s.name + '.' + o.name = ?
+    AND i.type = 1  -- Clustered index
+    """
+    cursor.execute(check_query, table_name)
+    return cursor.fetchone()[0] == 0
+
+
+def get_clustered_index_info(cursor, table_name='Sales.SalesOrderDetail'):
+    """Get clustered index information for the table"""
+    query = """
+    SELECT
+        i.name AS IndexName,
+        STRING_AGG(c.name, ', ') WITHIN GROUP (ORDER BY ic.key_ordinal) AS KeyColumns,
+        CASE WHEN i.is_primary_key = 1 THEN 1 ELSE 0 END AS IsPrimaryKey,
+        CASE WHEN i.is_primary_key = 1 THEN
+            (SELECT kc.name
+             FROM sys.key_constraints kc
+             WHERE kc.parent_object_id = i.object_id
+             AND kc.type = 'PK')
+        ELSE NULL END AS ConstraintName
+    FROM sys.indexes i
+    INNER JOIN sys.objects o ON i.object_id = o.object_id
+    INNER JOIN sys.schemas s ON o.schema_id = s.schema_id
+    INNER JOIN sys.index_columns ic ON i.object_id = ic.object_id AND i.index_id = ic.index_id AND ic.is_included_column = 0
+    INNER JOIN sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id
+    WHERE s.name + '.' + o.name = ?
+    AND i.type = 1  -- Clustered index
+    GROUP BY i.name, i.is_primary_key, i.object_id
+    """
+    cursor.execute(query, table_name)
+    return cursor.fetchone()
+
+def create_heap_table_scenario():
+    """Convert Sales.SalesOrderDetail to heap table by creating NC index and dropping clustered index"""
 
     try:
         with get_connection() as conn:
             cursor = conn.cursor()
 
-            print("\nIndex Usage Statistics for Production.Product:")
+            print("Initializing Sales.SalesOrderDetail heap conversion...")
             print("=" * 60)
 
-            # Query to show index usage statistics
+            table_name = 'Sales.SalesOrderDetail'
+
+            # Check if already a heap table
+            if is_heap_table(cursor, table_name):
+                print(f"✓ Table {table_name} is already a heap table - skipping conversion")
+                return
+
+            # Get current clustered index information
+            clustered_info = get_clustered_index_info(cursor, table_name)
+            if not clustered_info:
+                print(f"✗ No clustered index found on {table_name}")
+                return
+
+            clustered_index_name = clustered_info.IndexName
+            key_columns = clustered_info.KeyColumns
+            is_primary_key = clustered_info.IsPrimaryKey
+            constraint_name = clustered_info.ConstraintName
+
+            print(f"Current clustered index: {clustered_index_name}")
+            print(f"Key columns: {key_columns}")
+            print(f"Is Primary Key: {'Yes' if is_primary_key else 'No'}")
+            if constraint_name:
+                print(f"Primary Key constraint name: {constraint_name}")
+
+            # Step 1: Create non-clustered index with same key as clustered index
+            nc_index_name = f"IX_SalesOrderDetail_NC_{clustered_index_name.replace('PK_', '').replace('_', '')}"
+
+            # Check if NC index already exists
+            if index_exists(cursor, nc_index_name, table_name):
+                print(f"✓ Non-clustered index {nc_index_name} already exists")
+            else:
+                try:
+                    # Create the non-clustered index
+                    create_nc_sql = f"""
+                    CREATE NONCLUSTERED INDEX {nc_index_name}
+                    ON {table_name} ({key_columns})
+                    """
+
+                    print(f"Creating non-clustered index: {nc_index_name}")
+                    print(f"SQL: {create_nc_sql}")
+
+                    cursor.execute(create_nc_sql)
+                    conn.commit()
+                    print(f"✓ Successfully created non-clustered index {nc_index_name}")
+
+                except pyodbc.Error as e:
+                    print(f"✗ Failed to create non-clustered index {nc_index_name}: {e}")
+                    conn.rollback()
+                    return
+
+            # Step 2: Drop the clustered index (handle PRIMARY KEY constraints)
+            try:
+                if is_primary_key and constraint_name:
+                    # For PRIMARY KEY constraints, we need to drop the constraint first
+                    drop_constraint_sql = f"ALTER TABLE {table_name} DROP CONSTRAINT {constraint_name}"
+
+                    print(f"Dropping PRIMARY KEY constraint: {constraint_name}")
+                    print(f"SQL: {drop_constraint_sql}")
+
+                    cursor.execute(drop_constraint_sql)
+                    conn.commit()
+                    print(f"✓ Successfully dropped PRIMARY KEY constraint {constraint_name}")
+                else:
+                    # For regular clustered indexes, drop the index directly
+                    drop_clustered_sql = f"DROP INDEX {clustered_index_name} ON {table_name}"
+
+                    print(f"Dropping clustered index: {clustered_index_name}")
+                    print(f"SQL: {drop_clustered_sql}")
+
+                    cursor.execute(drop_clustered_sql)
+                    conn.commit()
+                    print(f"✓ Successfully dropped clustered index {clustered_index_name}")
+
+                print(f"✓ Table {table_name} is now a heap table")
+
+            except pyodbc.Error as e:
+                error_msg = f"✗ Failed to drop clustered index/constraint: {e}"
+                print(error_msg)
+                conn.rollback()
+                return
+
+            # Step 3: Recreate PRIMARY KEY as non-clustered constraint
+            if is_primary_key and constraint_name:
+                try:
+                    recreate_pk_sql = f"""
+                    ALTER TABLE {table_name}
+                    ADD CONSTRAINT PK_SalesOrderDetail
+                    PRIMARY KEY NONCLUSTERED ({key_columns})
+                    """
+
+                    print("Recreating PRIMARY KEY as non-clustered constraint...")
+                    print(f"SQL: {recreate_pk_sql}")
+
+                    cursor.execute(recreate_pk_sql)
+                    conn.commit()
+                    print("✓ Successfully recreated PRIMARY KEY as non-clustered constraint")
+
+                except pyodbc.Error as e:
+                    print(f"✗ Failed to recreate PRIMARY KEY constraint: {e}")
+                    conn.rollback()
+                    # Continue anyway - heap conversion was successful
+
+            print("\n" + "=" * 60)
+            print("Heap table conversion complete!")
+
+            # Display current indexes on Sales.SalesOrderDetail
+            print(f"\nCurrent indexes on {table_name}:")
             cursor.execute("""
                 SELECT
                     i.name AS IndexName,
                     i.type_desc AS IndexType,
-                    ius.user_seeks,
-                    ius.user_scans,
-                    ius.user_lookups,
-                    ius.user_updates,
-                    CASE
-                        WHEN ius.user_seeks + ius.user_scans + ius.user_lookups = 0 THEN 'UNUSED'
-                        ELSE 'USED'
-                    END AS UsageStatus
+                    STRING_AGG(c.name, ', ') WITHIN GROUP (ORDER BY ic.key_ordinal) AS KeyColumns
                 FROM sys.indexes i
                 INNER JOIN sys.objects o ON i.object_id = o.object_id
                 INNER JOIN sys.schemas s ON o.schema_id = s.schema_id
-                LEFT JOIN sys.dm_db_index_usage_stats ius ON i.object_id = ius.object_id
-                    AND i.index_id = ius.index_id
-                    AND ius.database_id = DB_ID()
-                WHERE s.name = 'Production' AND o.name = 'Product'
-                AND i.type IN (1, 2)  -- Clustered and Non-clustered
+                LEFT JOIN sys.index_columns ic ON i.object_id = ic.object_id AND i.index_id = ic.index_id AND ic.is_included_column = 0
+                LEFT JOIN sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id
+                WHERE s.name + '.' + o.name = ?
+                AND i.type IN (0, 1, 2)  -- Heap, Clustered, and Non-clustered
+                GROUP BY i.name, i.type_desc, i.index_id
                 ORDER BY i.index_id
-            """)
+            """, table_name)
 
-            stats = cursor.fetchall()
-            for stat in stats:
-                total_reads = (stat.user_seeks or 0) + (stat.user_scans or 0) + (stat.user_lookups or 0)
-                print(f"  {stat.IndexName}:")
-                print(f"    Type: {stat.IndexType}")
-                print(f"    Reads: {total_reads} (Seeks: {stat.user_seeks or 0}, Scans: {stat.user_scans or 0}, Lookups: {stat.user_lookups or 0})")
-                print(f"    Updates: {stat.user_updates or 0}")
-                print(f"    Status: {stat.UsageStatus}")
-                print()
+            indexes_list = cursor.fetchall()
+            for idx in indexes_list:
+                index_type = "HEAP" if idx.IndexType == "HEAP" else idx.IndexType
+                key_cols = idx.KeyColumns if idx.KeyColumns else "N/A"
+                print(f"  - {idx.IndexName or 'HEAP'} ({index_type}): {key_cols}")
 
     except pyodbc.Error as e:
         print(f"Database error: {e}")
         raise
-
-def cleanup_over_indexing_scenario():
-    """Remove the created indexes to clean up the over-indexing scenario"""
-
-    indexes_to_drop = [
-        # Set 1
-        'IX_Product_DaysToManufacture',
-        'IX_Product_SubcategoryID_ListPrice_FinishedGoods',
-        'IX_Product_ListPrice_Included',
-        'IX_Product_FinishedGoodsFlag',
-        # Set 2
-        'IX_Product_SellStartDate',
-        'IX_Product_Color_SafetyStock_ReorderPoint',
-        'IX_Product_Color_Included',
-        'IX_Product_SafetyStockLevel'
-    ]
-
-    try:
-        with get_connection() as conn:
-            cursor = conn.cursor()
-
-            print("Cleaning up over-indexing simulation...")
-            print("=" * 40)
-
-            for index_name in indexes_to_drop:
-                if index_exists(cursor, index_name):
-                    try:
-                        cursor.execute(f"DROP INDEX {index_name} ON Production.Product")
-                        conn.commit()
-                        print(f"✓ Dropped index {index_name}")
-                    except pyodbc.Error as e:
-                        print(f"✗ Failed to drop index {index_name}: {e}")
-                        conn.rollback()
-                else:
-                    print(f"- Index {index_name} does not exist - skipping")
-
-            print("\nCleanup complete!")
-
-    except pyodbc.Error as e:
-        print(f"Database error: {e}")
+    except Exception as e:
+        print(f"Unexpected error: {e}")
         raise
-
-if __name__ == "__main__":
-    import sys
-
-    if len(sys.argv) > 1:
-        if sys.argv[1] == "cleanup":
-            cleanup_over_indexing_scenario()
-        elif sys.argv[1] == "verify":
-            verify_over_indexing_scenario()
-        elif sys.argv[1] == "init":
-            create_over_indexing_scenario()
-        else:
-            print("Usage: python init_adventure_works.py [init|verify|cleanup]")
-            print("  init    - Create over-indexing scenario (default)")
-            print("  verify  - Show index usage statistics")
-            print("  cleanup - Remove created indexes")
-    else:
-        create_over_indexing_scenario()

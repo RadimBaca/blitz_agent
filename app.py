@@ -509,25 +509,27 @@ def analyze(display_name, rec_id):
 
         chat_history = dao.get_chat_history(procedure_name, rec_id)
         if not chat_history:
-            # Special handling for Over-Indexing BlitzIndex records
+            # Special handling for Over-Indexing and Heap analysis BlitzIndex records
             print(f"Procedure name: {procedure_name}, record.finding: {record.finding}")
             user_question = None
             if (procedure_name == "sp_BlitzIndex" and
-                record.finding and record.finding.startswith("Over-Indexing")):
+                record.finding and (record.finding.startswith("Over-Indexing") or
+                                  "Heap with a Nonclustered Primary Key" in record.finding)):
 
                 try:
-                    # Execute the SQL command using the new refactored method
+                    # Execute the SQL command using the refactored method
                     dao.process_over_indexing_analysis(record)
 
                     # Get the stored index data for analysis
                     db_indexes = dao.get_db_indexes(record.pbi_id)
 
-                    # Load the over-indexing specific prompt
-                    user_question = blitz_agent._load_over_indexing_prompt(
+                    # Load the specialized prompt (handles both over-indexing and heap analysis)
+                    user_question = blitz_agent._load_specialized_prompt(
                         record, db_indexes, db_conn.get_actual_db_name()
                     )
                 except (pyodbc.Error, ValueError, KeyError) as e:
-                    print(f"Error processing over-indexing analysis: {e}")
+                    analysis_type = "over-indexing" if record.finding.startswith("Over-Indexing") else "heap analysis"
+                    print(f"Error processing {analysis_type}: {e}")
 
             if user_question is None:
                 # Standard analysis for other types
@@ -626,17 +628,19 @@ def analyze_multiple(display_name):
                 print(f"Analyzing record {rec_id}: {record.finding}")
                 user_question = None
 
-                # Special handling for Over-Indexing BlitzIndex records
+                # Special handling for Over-Indexing and Heap analysis BlitzIndex records
                 if (procedure_name == "sp_BlitzIndex" and
-                    record.finding and record.finding.startswith("Over-Indexing")):
+                    record.finding and (record.finding.startswith("Over-Indexing") or
+                                      "Heap with a Nonclustered Primary Key" in record.finding)):
                     try:
                         dao.process_over_indexing_analysis(record)
                         db_indexes = dao.get_db_indexes(record.pbi_id)
-                        user_question = blitz_agent._load_over_indexing_prompt(
+                        user_question = blitz_agent._load_specialized_prompt(
                             record, db_indexes, db_conn.get_actual_db_name()
                         )
                     except (pyodbc.Error, ValueError, KeyError) as e:
-                        print(f"Error processing over-indexing analysis for record {rec_id}: {e}")
+                        analysis_type = "over-indexing" if record.finding.startswith("Over-Indexing") else "heap analysis"
+                        print(f"Error processing {analysis_type} for record {rec_id}: {e}")
 
                 if user_question is None:
                     # Standard analysis for other types

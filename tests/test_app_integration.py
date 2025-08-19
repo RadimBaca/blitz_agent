@@ -18,7 +18,7 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), 'adventureworks_workload'))
 try:
     import init_adventure_works as init_aw
-    import workload_generator_main as wg_main
+    import workload_generator as wg_main
 except ImportError:
     # Handle case when modules are not available
     init_aw = None
@@ -133,7 +133,11 @@ class TestAppIntegration:
             if init_aw:
                 # Call the create_over_indexing_scenario function directly
                 init_aw.create_over_indexing_scenario()
-                print("✓ Adventure Works initialization completed")
+                print("✓ Adventure Works over-indexing initialization completed")
+
+                # Call the create_heap_table_scenario function
+                init_aw.create_heap_table_scenario()
+                print("✓ Adventure Works heap table conversion completed")
             else:
                 print("⚠ Adventure Works module not available - skipping initialization")
         except (ConnectionError, ImportError, AttributeError) as e:
@@ -142,7 +146,7 @@ class TestAppIntegration:
         # Run workload generator
         try:
             if wg_main:
-                wg_main.main()
+                wg_main.execute_workload(duration_minutes=0.5)
                 print("✓ Workload generator completed")
             else:
                 print("⚠ Workload generator module not available - skipping")

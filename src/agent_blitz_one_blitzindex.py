@@ -316,44 +316,75 @@ def execute_more_info_query(more_info_sql: str) -> List[Dict[str, Any]]:
         return []
 
 
-def _load_over_indexing_prompt(record, db_indexes: List[DBIndexRecord], database: str) -> str:
+def _load_specialized_prompt(record, db_indexes: List[DBIndexRecord], database: str) -> str:
     """
-    Load the over-indexing specific prompt template and populate it with index data.
+    Load specialized prompt templates based on the finding type and populate with index data.
+    Supports both over-indexing and heap analysis findings.
     """
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
     version = int(os.getenv("VERSION", '1'))
+    finding = record.finding or ""
+
+    # Determine which type of analysis this is
+    is_over_indexing = finding.startswith("Over-Indexing")
+    is_heap_analysis = "Heap with a Nonclustered Primary Key" in finding
 
     if version == 1:
-        # Use the generic prompt
+        # Use the generic prompt for version 1
         prompt_file = os.path.join(project_root, "prompts", "general_sp_blitz.txt")
         try:
             with open(prompt_file, "r", encoding="utf-8") as f:
                 template = f.read()
         except (IOError, OSError) as e:
-            print(f"Error loading over-indexing prompt: {e}")
-            return f"Analyze over-indexing issue for {record.finding} in database {database}"
+            analysis_type = "over-indexing" if is_over_indexing else "heap table"
+            print(f"Error loading {analysis_type} prompt: {e}")
+            return f"Analyze {analysis_type} issue for {finding} in database {database}"
 
-        return template.format(procedure="sp_BlitzIndex", finding=record.finding, database=database)
+        return template.format(procedure="sp_BlitzIndex", finding=finding, database=database)
 
-
-    if version == 2:
-        # Reuse the project_root from module level
-        prompt_file = os.path.join(project_root, "db", "prompts", "over_indexing.txt")
+    elif version == 2:
+        # Use specialized prompts for version 2
+        if is_over_indexing:
+            prompt_file = os.path.join(project_root, "db", "prompts", "over_indexing.txt")
+            error_prefix = "over-indexing"
+            format_func = _format_index_data_for_prompt
+        elif is_heap_analysis:
+            prompt_file = os.path.join(project_root, "db", "prompts", "heap_analysis.txt")
+            error_prefix = "heap analysis"
+            format_func = _format_heap_data_for_prompt
+        else:
+            # Fallback to over-indexing prompt for unknown types
+            prompt_file = os.path.join(project_root, "db", "prompts", "over_indexing.txt")
+            error_prefix = "analysis"
+            format_func = _format_index_data_for_prompt
 
         try:
             with open(prompt_file, "r", encoding="utf-8") as f:
                 template = f.read()
         except (IOError, OSError) as e:
-            print(f"Error loading over-indexing prompt: {e}")
-            return f"Analyze over-indexing issue for {record.finding} in database {database}"
+            print(f"Error loading {error_prefix} prompt: {e}")
+            return f"Analyze {error_prefix} issue for {finding} in database {database}"
 
         # Format the index data for the prompt
-        index_analysis_data = _format_index_data_for_prompt(record, db_indexes)
-
+        index_analysis_data = format_func(record, db_indexes)
         return template.format(index_analysis_data=index_analysis_data)
 
     return "Version of the application is incorrectly set. Possible values are 1 or 2"
+
+
+# Backward compatibility functions
+def _load_over_indexing_prompt(record, db_indexes: List[DBIndexRecord], database: str) -> str:
+    """
+    Backward compatibility wrapper for over-indexing prompt loading.
+    """
+    return _load_specialized_prompt(record, db_indexes, database)
+
+
+def _load_heap_analysis_prompt(record, db_indexes: List[DBIndexRecord], database: str) -> str:
+    """
+    Backward compatibility wrapper for heap analysis prompt loading.
+    """
+    return _load_specialized_prompt(record, db_indexes, database)
 
 def _format_index_data_for_prompt(record, db_indexes: List[DBIndexRecord]) -> str:
     """
@@ -405,6 +436,90 @@ def _format_index_data_for_prompt(record, db_indexes: List[DBIndexRecord]) -> st
         formatted_data.append(f"Modified: {index.modify_date or 'N/A'}")
 
         formatted_data.append("-" * 30)
+
+    return "\n".join(formatted_data)
+
+
+def _format_heap_data_for_prompt(record, db_indexes: List[DBIndexRecord]) -> str:
+    """
+    Format the index data into a readable structure for heap analysis AI prompt.
+    Focus on relevant attributes for heap table analysis:
+    - Current heap table structure
+    - Nonclustered primary key details
+    - All existing nonclustered indexes with their definitions
+    - Usage statistics to identify clustering candidates
+    - Access patterns and performance characteristics
+    """
+    if not db_indexes:
+        return f"No detailed index data available for {record.finding}"
+
+    # Format the data specifically for heap analysis
+    formatted_data = []
+    formatted_data.append(f"HEAP TABLE ANALYSIS for: {record.finding}")
+    formatted_data.append(f"Details: {record.details_schema_table_index_indexid}")
+    formatted_data.append("")
+    formatted_data.append("CURRENT HEAP TABLE STRUCTURE:")
+    formatted_data.append("=" * 50)
+
+    # Identify the primary key index and other indexes
+    primary_key_index = None
+    other_indexes = []
+
+    for index in db_indexes:
+        # Look for primary key indicators in the definition
+        if ("[PK]" in str(index.index_definition) or
+            "PRIMARY KEY" in str(index.index_definition).upper() or
+            "PK_" in str(index.db_schema_object_indexid)):
+            primary_key_index = index
+        else:
+            other_indexes.append(index)
+
+    # Display primary key information first
+    if primary_key_index:
+        formatted_data.append(f"\nPRIMARY KEY (Nonclustered): {primary_key_index.db_schema_object_indexid}")
+        formatted_data.append(f"Definition: {primary_key_index.index_definition or 'N/A'}")
+        formatted_data.append(f"Usage Summary: {primary_key_index.index_usage_summary or 'N/A'}")
+        formatted_data.append(f"Size Summary: {primary_key_index.index_size_summary or 'N/A'}")
+        formatted_data.append(f"Operation Stats: {primary_key_index.index_op_stats or 'N/A'}")
+        formatted_data.append("")
+
+    # Display other nonclustered indexes
+    formatted_data.append("OTHER NONCLUSTERED INDEXES:")
+    formatted_data.append("-" * 40)
+
+    if not other_indexes:
+        formatted_data.append("No other nonclustered indexes found on this table.")
+    else:
+        for i, index in enumerate(other_indexes, 1):
+            formatted_data.append(f"\nINDEX {i}: {index.db_schema_object_indexid}")
+            formatted_data.append(f"Definition: {index.index_definition or 'N/A'}")
+            formatted_data.append(f"Secret Columns: {index.secret_columns or 'N/A'}")
+            formatted_data.append(f"Usage Summary: {index.index_usage_summary or 'N/A'}")
+            formatted_data.append(f"Operation Stats: {index.index_op_stats or 'N/A'}")
+            formatted_data.append(f"Size Summary: {index.index_size_summary or 'N/A'}")
+
+            # Access patterns - important for clustering decisions
+            formatted_data.append(f"Last User Seek: {index.last_user_seek or 'Never'}")
+            formatted_data.append(f"Last User Scan: {index.last_user_scan or 'Never'}")
+            formatted_data.append(f"Last User Lookup: {index.last_user_lookup or 'Never'}")
+            formatted_data.append(f"Last User Update: {index.last_user_update or 'Never'}")
+
+            # Foreign key information
+            formatted_data.append(f"Referenced by FK: {'Yes' if index.is_referenced_by_foreign_key else 'No'}")
+            formatted_data.append(f"FK Coverage: {index.fks_covered_by_index or 'N/A'}")
+
+            formatted_data.append("-" * 30)
+
+    # Add summary information for clustering analysis
+    formatted_data.append("\nCLUSTERING ANALYSIS CONSIDERATIONS:")
+    formatted_data.append("-" * 40)
+    formatted_data.append("• Current table is a HEAP (no clustered index)")
+    formatted_data.append("• Primary key is NONCLUSTERED, causing RID lookups")
+    formatted_data.append("• Consider clustering key candidates based on:")
+    formatted_data.append("  - Query patterns and WHERE clause usage")
+    formatted_data.append("  - Uniqueness and selectivity")
+    formatted_data.append("  - Insert patterns (prefer ascending keys)")
+    formatted_data.append("  - Update frequency (avoid frequently updated columns)")
 
     return "\n".join(formatted_data)
 
