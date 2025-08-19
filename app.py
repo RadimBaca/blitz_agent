@@ -545,14 +545,20 @@ def analyze(display_name, rec_id):
             # Get the actual record ID (pb_id, pbi_id, or pbc_id) for recommendations
             actual_record_id = getattr(record, PROCEDURES_ID_MAPPING.get(procedure_name, "pb_id"))
 
-            result = blitz_agent.execute(
-                procedure=procedure_name,
-                record_id=actual_record_id,
-                user_input=user_question,
-                chat_history=[]
-            )
-            chat_history = [("user", store_user_question), ("ai", result["output"])]
-            dao.store_chat_history(procedure_name, rec_id, chat_history)
+            try:
+                result = blitz_agent.execute(
+                    procedure=procedure_name,
+                    record_id=actual_record_id,
+                    user_input=user_question,
+                    chat_history=[]
+                )
+                chat_history = [("user", store_user_question), ("ai", result["output"])]
+                dao.store_chat_history(procedure_name, rec_id, chat_history)
+            except Exception as e:
+                # Handle agent execution errors gracefully
+                error_message = f"Analysis failed due to a technical issue: {str(e)}. Please try again."
+                chat_history = [("user", store_user_question), ("ai", error_message)]
+                app.logger.error(f"Agent execution failed: {str(e)}")
 
         return render_template("analyze.html",
                             proc_name=display_name,
