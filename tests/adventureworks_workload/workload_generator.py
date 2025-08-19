@@ -560,8 +560,8 @@ def execute_workload(duration_minutes=5, _concurrent_sessions=1):
             except pyodbc.Error as e:
                 print(f"Error executing {operation.get('name', operation.get('operation'))}: {str(e)[:100]}...")
 
-            # Random delay between operations (0.5-3 seconds)
-            time.sleep(random.uniform(0.5, 3.0))
+            # Random delay between operations (0.01-0.1 seconds)
+            time.sleep(random.uniform(0.01, 0.1))
 
     except KeyboardInterrupt:
         print("\nWorkload interrupted by user")

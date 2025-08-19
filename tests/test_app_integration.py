@@ -18,7 +18,7 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), 'adventureworks_workload'))
 try:
     import init_adventure_works as init_aw
-    import workload_generator_main as wg_main
+    import workload_generator as wg_main
 except ImportError:
     # Handle case when modules are not available
     init_aw = None
@@ -146,7 +146,7 @@ class TestAppIntegration:
         # Run workload generator
         try:
             if wg_main:
-                wg_main.main()
+                wg_main.execute_workload(duration_minutes=0.5)
                 print("✓ Workload generator completed")
             else:
                 print("⚠ Workload generator module not available - skipping")
