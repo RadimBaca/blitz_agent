@@ -56,6 +56,13 @@
                 </div>
                 <div class="card-footer">
                     <a href="{{ url_for('recommendations') }}" class="btn btn-secondary">← Back to Recommendations</a>
+
+                    <!-- Delete button with confirmation -->
+                    <form style="display: inline;" method="POST" action="{{ url_for('delete_recommendation', id_recom=recommendation.id_recom) }}"
+                          onsubmit="return confirm('Are you sure you want to delete this recommendation? This action cannot be undone.');">
+                        <button type="submit" class="btn btn-danger">Delete Recommendation</button>
+                    </form>
+
                     {% if recommendation.pb_id %}
                         <a href="{{ url_for('analyze', display_name='Blitz', rec_id=recommendation.pb_procedure_order) }}" class="btn btn-primary">View Related Blitz Analysis</a>
                     {% elif recommendation.pbi_id %}

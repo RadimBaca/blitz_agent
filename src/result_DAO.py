@@ -826,3 +826,30 @@ def get_recommendations_for_record(procedure_name: str, record_id: int) -> List[
 
     except pyodbc.Error as e:
         raise e
+
+
+def delete_recommendation(id_recom: int) -> bool:
+    """Delete a recommendation by its ID
+
+    Args:
+        id_recom: The ID of the recommendation to delete
+
+    Returns:
+        bool: True if recommendation was deleted, False if not found
+
+    Raises:
+        pyodbc.Error: If database error occurs
+    """
+    _ensure_db()
+    conn = _get_conn()
+
+    try:
+        cur = conn.execute("DELETE FROM Recommendation WHERE id_recom = ?", (id_recom,))
+        deleted_rows = cur.rowcount
+        conn.commit()
+
+        return deleted_rows > 0
+
+    except pyodbc.Error as e:
+        conn.rollback()
+        raise e
