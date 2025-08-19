@@ -141,8 +141,12 @@
                         {% for rec in records %}
                             <tr {% if rec._analyzed %}style="background-color: #e6f2ff;"{% endif %}>
                                 <td>
-                                    <input type="checkbox" name="selected_records" value="{{ rec._rec_id }}"
-                                           class="record-checkbox" onchange="updateAnalyzeButton()">
+                                    {% if not rec._analyzed %}
+                                        <input type="checkbox" name="selected_records" value="{{ rec._rec_id }}"
+                                               class="record-checkbox" onchange="updateAnalyzeButton()">
+                                    {% else %}
+                                        <span class="analyzed-indicator" title="Already analyzed">✓</span>
+                                    {% endif %}
                                 </td>
                                 <td class="query-text">
                                     <div class="query-preview" title="{{ rec.query_text if rec.query_text else '' }}">
@@ -452,6 +456,7 @@ function formatHour(hour) {
 // Initialize hour selection on page load
 document.addEventListener('DOMContentLoaded', function() {
     initializeHourSelection();
+    updateAnalyzeButton();
 });
 </script>
 {% endblock %}

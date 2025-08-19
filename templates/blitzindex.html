@@ -92,8 +92,12 @@
                         {% for rec in records %}
                             <tr {% if rec._analyzed %}style="background-color: #e6f2ff;"{% endif %}>
                                 <td>
-                                    <input type="checkbox" name="selected_records" value="{{ rec._rec_id }}"
-                                           class="record-checkbox" onchange="updateAnalyzeButton()">
+                                    {% if not rec._analyzed %}
+                                        <input type="checkbox" name="selected_records" value="{{ rec._rec_id }}"
+                                               class="record-checkbox" onchange="updateAnalyzeButton()">
+                                    {% else %}
+                                        <span class="analyzed-indicator" title="Already analyzed">✓</span>
+                                    {% endif %}
                                 </td>
                                 <td>{{ rec.finding if rec.finding else '' }}</td>
                                 <td class="index-details">{{ rec.details_schema_table_index_indexid if rec.details_schema_table_index_indexid else '' }}</td>
@@ -233,6 +237,11 @@ document.getElementById('multiAnalysisForm').addEventListener('submit', function
         hiddenInput.value = checkbox.value;
         this.appendChild(hiddenInput);
     });
+});
+
+// Initialize button state on page load
+document.addEventListener('DOMContentLoaded', function() {
+    updateAnalyzeButton();
 });
 </script>
 {% endblock %}

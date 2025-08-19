@@ -1079,6 +1079,21 @@ table td:first-child {
     border: 1px solid #bee5eb;
 }
 
+/* Analyzed indicator styling */
+.analyzed-indicator {
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    text-align: center;
+    line-height: 18px;
+    color: #28a745;
+    font-weight: bold;
+    font-size: 14px;
+    border-radius: 50%;
+    background-color: #d4edda;
+    border: 1px solid #28a745;
+}
+
 /* Multi-analysis controls */
 .multi-analysis-controls {
     display: flex;
