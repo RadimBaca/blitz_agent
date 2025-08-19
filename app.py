@@ -97,7 +97,13 @@ PROCEDURES_ID_MAPPING = {
 
 @app.template_filter("markdown")
 def markdown_filter(text):
-    return Markup(markdown.markdown(text))
+    # Use markdown with configuration to preserve list structure
+    md = markdown.Markdown(
+        extensions=['fenced_code', 'tables'],
+        tab_length=2,
+        output_format='html'
+    )
+    return Markup(md.convert(text))
 
 @app.route("/clear_all", methods=["POST"])
 def clear_all_route():

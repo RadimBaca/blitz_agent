@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Markdown Testing Results</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .test-section {
+            border: 2px solid #ddd;
+            margin: 20px 0;
+            padding: 20px;
+            border-radius: 8px;
+            background-color: #f9f9f9;
+        }
+        .test-title {
+            background-color: #007BFF;
+            color: white;
+            padding: 10px;
+            margin: -20px -20px 20px -20px;
+            border-radius: 6px 6px 0 0;
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+        .original-markdown {
+            background-color: #f4f4f4;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+        }
+        .result {
+            background-color: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        h1, h2, h3, h4 {
+            color: #333;
+        }
+        code {
+            background-color: #f4f4f4;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            padding: 2px 4px;
+            font-family: 'Courier New', monospace;
+        }
+        pre {
+            background-color: #f4f4f4;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            overflow-x: auto;
+        }
+        .nav {
+            background-color: #333;
+            padding: 10px 0;
+            margin: -20px -20px 20px -20px;
+        }
+        .nav a {
+            color: white;
+            text-decoration: none;
+            margin: 0 15px;
+            padding: 5px 10px;
+            border-radius: 3px;
+        }
+        .nav a:hover {
+            background-color: #555;
+        }
+    </style>
+</head>
+<body>
+    <h1>Markdown Testing Results</h1>
+
+    <div class="nav">
+        <a href="#original">Original Text</a>
+        <a href="#basic">Basic Markdown</a>
+        <a href="#extensions">With Extensions</a>
+        <a href="#custom">Custom Formatter</a>
+        <a href="#minimal">Minimal Config</a>
+        <a href="#preserve">Preserve Structure</a>
+    </div>
+
+    <div id="original" class="test-section">
+        <div class="test-title">Original Markdown Text</div>
+        <div class="original-markdown">
+
+### Detailed Recommendations
+
+#### 1. Index: `IX_Product_Color_Included`
+- **Reason for Removal**: This index is not used for any reads (0 seeks, scans, or lookups). Its functionality is covered by `IX_Product_Color_SafetyStock_ReorderPoint` and `IX_Product_ListPrice_Included`.
+- **Covering Indexes**:
+  - `IX_Product_Color_SafetyStock_ReorderPoint`
+  - `IX_Product_ListPrice_Included`
+- **SQL Command**:
+  ```sql
+  DROP INDEX IX_Product_Color_Included ON Production.Product;
+  ```
+- **Recommendation Link**: [View Recommendation](http://localhost:5001/recommendation/1)
+
+#### 2. Another Index Example
+Some more content here with **bold text** and `inline code`.
+
+### Actionable Recommendations
+
+The following recommendations have been created for each specific index removal:
+
+1. [Remove redundant index IX_Product_Color_Included on Production.Product - functionality covered by IX_Product_Color_SafetyStock_ReorderPoint and IX_Product_ListPrice_Included](http://localhost:5001/recommendation/1)
+   - SQL: `DROP INDEX IX_Product_Color_Included ON Production.Product;`
+
+### Summary
+This is a summary section with:
+1. Numbered item one
+2. Numbered item two
+   - Sub-bullet point
+   - Another sub-bullet
+3. Final numbered item
+</div>
+    </div>
+
+    <div id="basic" class="test-section">
+        <div class="test-title">1. Basic Markdown (no extensions)</div>
+        <div class="result"><h3>Detailed Recommendations</h3>
+<h4>1. Index: <code>IX_Product_Color_Included</code></h4>
+<ul>
+<li><strong>Reason for Removal</strong>: This index is not used for any reads (0 seeks, scans, or lookups). Its functionality is covered by <code>IX_Product_Color_SafetyStock_ReorderPoint</code> and <code>IX_Product_ListPrice_Included</code>.</li>
+<li><strong>Covering Indexes</strong>:</li>
+<li><code>IX_Product_Color_SafetyStock_ReorderPoint</code></li>
+<li><code>IX_Product_ListPrice_Included</code></li>
+<li><strong>SQL Command</strong>:
+  <code>sql
+  DROP INDEX IX_Product_Color_Included ON Production.Product;</code></li>
+<li><strong>Recommendation Link</strong>: <a href="http://localhost:5001/recommendation/1">View Recommendation</a></li>
+</ul>
+<h4>2. Another Index Example</h4>
+<p>Some more content here with <strong>bold text</strong> and <code>inline code</code>.</p>
+<h3>Actionable Recommendations</h3>
+<p>The following recommendations have been created for each specific index removal:</p>
+<ol>
+<li><a href="http://localhost:5001/recommendation/1">Remove redundant index IX_Product_Color_Included on Production.Product - functionality covered by IX_Product_Color_SafetyStock_ReorderPoint and IX_Product_ListPrice_Included</a></li>
+<li>SQL: <code>DROP INDEX IX_Product_Color_Included ON Production.Product;</code></li>
+</ol>
+<h3>Summary</h3>
+<p>This is a summary section with:
+1. Numbered item one
+2. Numbered item two
+   - Sub-bullet point
+   - Another sub-bullet
+3. Final numbered item</p></div>
+    </div>
+
+    <div id="extensions" class="test-section">
+        <div class="test-title">2. Markdown with Extensions (fenced_code, tables, codehilite, toc)</div>
+        <div class="result"><h3 id="detailed-recommendations">Detailed Recommendations</h3>
+<h4 id="1-index-ix_product_color_included">1. Index: <code>IX_Product_Color_Included</code></h4>
+<ul>
+<li><strong>Reason for Removal</strong>: This index is not used for any reads (0 seeks, scans, or lookups). Its functionality is covered by <code>IX_Product_Color_SafetyStock_ReorderPoint</code> and <code>IX_Product_ListPrice_Included</code>.</li>
+<li><strong>Covering Indexes</strong>:</li>
+<li><code>IX_Product_Color_SafetyStock_ReorderPoint</code></li>
+<li><code>IX_Product_ListPrice_Included</code></li>
+<li><strong>SQL Command</strong>:
+  <code>sql
+  DROP INDEX IX_Product_Color_Included ON Production.Product;</code></li>
+<li><strong>Recommendation Link</strong>: <a href="http://localhost:5001/recommendation/1">View Recommendation</a></li>
+</ul>
+<h4 id="2-another-index-example">2. Another Index Example</h4>
+<p>Some more content here with <strong>bold text</strong> and <code>inline code</code>.</p>
+<h3 id="actionable-recommendations">Actionable Recommendations</h3>
+<p>The following recommendations have been created for each specific index removal:</p>
+<ol>
+<li><a href="http://localhost:5001/recommendation/1">Remove redundant index IX_Product_Color_Included on Production.Product - functionality covered by IX_Product_Color_SafetyStock_ReorderPoint and IX_Product_ListPrice_Included</a></li>
+<li>SQL: <code>DROP INDEX IX_Product_Color_Included ON Production.Product;</code></li>
+</ol>
+<h3 id="summary">Summary</h3>
+<p>This is a summary section with:
+1. Numbered item one
+2. Numbered item two
+   - Sub-bullet point
+   - Another sub-bullet
+3. Final numbered item</p></div>
+    </div>
+
+    <div id="custom" class="test-section">
+        <div class="test-title">3. Custom Simple Formatter</div>
+        <div class="result"><br>
+
+<h3>Detailed Recommendations</h3><br>
+
+<h4>1. Index: <code>IX_Product_Color_Included</code></h4><br>
+- <strong>Reason for Removal</strong>: This index is not used for any reads (0 seeks, scans, or lookups). Its functionality is covered by <code>IX_Product_Color_SafetyStock_ReorderPoint</code> and <code>IX_Product_ListPrice_Included</code>.<br>
+- <strong>Covering Indexes</strong>:<br>
+  - <code>IX_Product_Color_SafetyStock_ReorderPoint</code><br>
+  - <code>IX_Product_ListPrice_Included</code><br>
+- <strong>SQL Command</strong>:<br>
+  ``<code>sql<br>
+  DROP INDEX IX_Product_Color_Included ON Production.Product;<br>
+  </code>`<code><br>
+- <strong>Recommendation Link</strong>: <a href="http://localhost:5001/recommendation/1">View Recommendation</a><br>
+
+<h4>2. Another Index Example</h4><br>
+Some more content here with <strong>bold text</strong> and </code>inline code<code>.<br>
+
+<h3>Actionable Recommendations</h3><br>
+<br>
+The following recommendations have been created for each specific index removal:<br>
+<br>
+1. <a href="http://localhost:5001/recommendation/1">Remove redundant index IX_Product_Color_Included on Production.Product - functionality covered by IX_Product_Color_SafetyStock_ReorderPoint and IX_Product_ListPrice_Included</a><br>
+   - SQL: </code>DROP INDEX IX_Product_Color_Included ON Production.Product;`<br>
+
+<h3>Summary</h3><br>
+This is a summary section with:<br>
+1. Numbered item one<br>
+2. Numbered item two<br>
+   - Sub-bullet point<br>
+   - Another sub-bullet<br>
+3. Final numbered item<br>
+</div>
+    </div>
+
+    <div id="minimal" class="test-section">
+        <div class="test-title">4. Minimal Config (fenced_code only)</div>
+        <div class="result"><h3>Detailed Recommendations</h3>
+<h4>1. Index: <code>IX_Product_Color_Included</code></h4>
+<ul>
+<li><strong>Reason for Removal</strong>: This index is not used for any reads (0 seeks, scans, or lookups). Its functionality is covered by <code>IX_Product_Color_SafetyStock_ReorderPoint</code> and <code>IX_Product_ListPrice_Included</code>.</li>
+<li><strong>Covering Indexes</strong>:</li>
+<li><code>IX_Product_Color_SafetyStock_ReorderPoint</code></li>
+<li><code>IX_Product_ListPrice_Included</code></li>
+<li><strong>SQL Command</strong>:
+  <code>sql
+  DROP INDEX IX_Product_Color_Included ON Production.Product;</code></li>
+<li><strong>Recommendation Link</strong>: <a href="http://localhost:5001/recommendation/1">View Recommendation</a></li>
+</ul>
+<h4>2. Another Index Example</h4>
+<p>Some more content here with <strong>bold text</strong> and <code>inline code</code>.</p>
+<h3>Actionable Recommendations</h3>
+<p>The following recommendations have been created for each specific index removal:</p>
+<ol>
+<li><a href="http://localhost:5001/recommendation/1">Remove redundant index IX_Product_Color_Included on Production.Product - functionality covered by IX_Product_Color_SafetyStock_ReorderPoint and IX_Product_ListPrice_Included</a></li>
+<li>SQL: <code>DROP INDEX IX_Product_Color_Included ON Production.Product;</code></li>
+</ol>
+<h3>Summary</h3>
+<p>This is a summary section with:
+1. Numbered item one
+2. Numbered item two
+   - Sub-bullet point
+   - Another sub-bullet
+3. Final numbered item</p></div>
+    </div>
+
+    <div id="preserve" class="test-section">
+        <div class="test-title">5. Preserve Structure Config</div>
+        <div class="result"><h3>Detailed Recommendations</h3>
+<h4>1. Index: <code>IX_Product_Color_Included</code></h4>
+<ul>
+<li><strong>Reason for Removal</strong>: This index is not used for any reads (0 seeks, scans, or lookups). Its functionality is covered by <code>IX_Product_Color_SafetyStock_ReorderPoint</code> and <code>IX_Product_ListPrice_Included</code>.</li>
+<li><strong>Covering Indexes</strong>:<ul>
+<li><code>IX_Product_Color_SafetyStock_ReorderPoint</code></li>
+<li><code>IX_Product_ListPrice_Included</code></li>
+</ul>
+</li>
+<li><strong>SQL Command</strong>:
+  <code>sql
+  DROP INDEX IX_Product_Color_Included ON Production.Product;</code></li>
+<li><strong>Recommendation Link</strong>: <a href="http://localhost:5001/recommendation/1">View Recommendation</a></li>
+</ul>
+<h4>2. Another Index Example</h4>
+<p>Some more content here with <strong>bold text</strong> and <code>inline code</code>.</p>
+<h3>Actionable Recommendations</h3>
+<p>The following recommendations have been created for each specific index removal:</p>
+<ol>
+<li><a href="http://localhost:5001/recommendation/1">Remove redundant index IX_Product_Color_Included on Production.Product - functionality covered by IX_Product_Color_SafetyStock_ReorderPoint and IX_Product_ListPrice_Included</a><ul>
+<li>SQL: <code>DROP INDEX IX_Product_Color_Included ON Production.Product;</code></li>
+</ul>
+</li>
+</ol>
+<h3>Summary</h3>
+<p>This is a summary section with:
+1. Numbered item one
+2. Numbered item two
+   - Sub-bullet point
+   - Another sub-bullet
+3. Final numbered item</p></div>
+    </div>
+
+</body>
+</html>
