@@ -4,6 +4,9 @@ import io
 import csv
 import pyodbc
 import sys
+import time
+import logging
+from httpx import RemoteProtocolError
 
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.documents import Document
@@ -17,6 +20,10 @@ from langchain_community.vectorstores import Chroma
 from .db_connection import get_connection
 from .models import DBIndexRecord
 from . import result_DAO as dao
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Always resolve vector store relative to project root, not src/
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -161,7 +168,14 @@ prompt_template = ChatPromptTemplate.from_messages([
 
 tools = [run_sqlserver_query_as_csv, query_knowledge_base, add_recommendation]
 
-llm = ChatOpenAI(model_name="gpt-4o-mini", temperature=0)
+# Configure LLM with more robust settings for network stability
+llm = ChatOpenAI(
+    model_name="gpt-4o-mini",
+    temperature=0,
+    request_timeout=60,  # 60 second timeout
+    max_retries=3,       # Built-in retry logic
+    streaming=False      # Disable streaming to avoid connection issues
+)
 
 # Agent
 agent = create_tool_calling_agent(llm=llm, tools=tools, prompt=prompt_template)
@@ -171,6 +185,7 @@ agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True, max_itera
 def execute(procedure: str, record_id: int, user_input: str, chat_history: list) -> dict:
     """
     Execute agent analysis with proper context for recommendations.
+    Includes retry logic for network issues.
 
     Args:
         procedure: The procedure name (e.g., 'sp_Blitz', 'sp_BlitzIndex', 'sp_BlitzCache')
@@ -184,13 +199,45 @@ def execute(procedure: str, record_id: int, user_input: str, chat_history: list)
     # Set context for tools
     set_analysis_context(procedure, record_id)
 
-    # Execute agent
-    result = agent_executor.invoke({
-        "input": user_input,
-        "chat_history": chat_history
-    })
+    max_retries = 3
+    retry_delay = 2  # seconds
 
-    return result
+    for attempt in range(max_retries):
+        try:
+            logger.info("Attempting to execute agent (attempt %d/%d)", attempt + 1, max_retries)
+
+            # Execute agent
+            result = agent_executor.invoke({
+                "input": user_input,
+                "chat_history": chat_history
+            })
+
+            logger.info("Agent execution successful")
+            return result
+
+        except (RemoteProtocolError, ConnectionError, TimeoutError) as e:
+            logger.warning("Network error on attempt %d/%d: %s", attempt + 1, max_retries, str(e))
+
+            if attempt < max_retries - 1:
+                logger.info("Retrying in %d seconds...", retry_delay)
+                time.sleep(retry_delay)
+                retry_delay *= 2  # Exponential backoff
+            else:
+                logger.error("All retry attempts failed")
+                return {
+                    "output": f"Network error occurred after {max_retries} attempts. Please try again later. Error: {str(e)}"
+                }
+
+        except Exception as e:  # pylint: disable=broad-except
+            logger.error("Unexpected error during agent execution: %s", str(e))
+            return {
+                "output": f"An unexpected error occurred: {str(e)}"
+            }
+
+    # This should never be reached, but just in case
+    return {
+        "output": "Failed to execute agent after all retry attempts."
+    }
 
 
 
@@ -273,21 +320,40 @@ def _load_over_indexing_prompt(record, db_indexes: List[DBIndexRecord], database
     """
     Load the over-indexing specific prompt template and populate it with index data.
     """
-    # Reuse the project_root from module level
-    prompt_file = os.path.join(project_root, "prompts", "over_indexing.txt")
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-    try:
-        with open(prompt_file, "r", encoding="utf-8") as f:
-            template = f.read()
-    except (IOError, OSError) as e:
-        print(f"Error loading over-indexing prompt: {e}")
-        return f"Analyze over-indexing issue for {record.finding} in database {database}"
+    version = int(os.getenv("VERSION", '1'))
 
-    # Format the index data for the prompt
-    index_analysis_data = _format_index_data_for_prompt(record, db_indexes)
+    if version == 1:
+        # Use the generic prompt
+        prompt_file = os.path.join(project_root, "prompts", "general_sp_blitz.txt")
+        try:
+            with open(prompt_file, "r", encoding="utf-8") as f:
+                template = f.read()
+        except (IOError, OSError) as e:
+            print(f"Error loading over-indexing prompt: {e}")
+            return f"Analyze over-indexing issue for {record.finding} in database {database}"
 
-    return template.format(index_analysis_data=index_analysis_data)
+        return template.format(procedure="sp_BlitzIndex", finding=record.finding, database=database)
 
+
+    if version == 2:
+        # Reuse the project_root from module level
+        prompt_file = os.path.join(project_root, "db", "prompts", "over_indexing.txt")
+
+        try:
+            with open(prompt_file, "r", encoding="utf-8") as f:
+                template = f.read()
+        except (IOError, OSError) as e:
+            print(f"Error loading over-indexing prompt: {e}")
+            return f"Analyze over-indexing issue for {record.finding} in database {database}"
+
+        # Format the index data for the prompt
+        index_analysis_data = _format_index_data_for_prompt(record, db_indexes)
+
+        return template.format(index_analysis_data=index_analysis_data)
+
+    return "Version of the application is incorrectly set. Possible values are 1 or 2"
 
 def _format_index_data_for_prompt(record, db_indexes: List[DBIndexRecord]) -> str:
     """
