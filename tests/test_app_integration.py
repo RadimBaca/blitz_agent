@@ -11,6 +11,7 @@ import src.db_DAO as db_dao
 from src.db_DAO import DatabaseConnection
 from src.connection_DAO import _get_conn
 import src.db_connection as db_conn
+import src.result_DAO as dao
 
 # Import Adventure Works workload modules
 import sys
@@ -296,6 +297,57 @@ class TestAppIntegration:
         # At minimum, verify that the database connection was properly stored
         # This tests the core state database functionality
         assert db_conn_check, "Core state database functionality failed"
+
+    def test_recommendation_delete(self, server_health_check):
+        """
+        Test recommendation deletion functionality
+        """
+        app_url = server_health_check
+
+        # First, create a test recommendation
+        test_description = "Test recommendation for deletion"
+        test_sql = "SELECT 1 -- Test SQL command"
+
+        # Get a valid pb_id from existing data
+        conn = _get_conn()
+        cursor = conn.execute("SELECT pb_id FROM Procedure_blitz LIMIT 1")
+        row = cursor.fetchone()
+
+        if not row:
+            pytest.skip("No Procedure_blitz records found for testing")
+
+        pb_id = row[0]
+
+        # Insert test recommendation
+        recommendation_id = dao.insert_recommendation(
+            description=test_description,
+            sql_command=test_sql,
+            pb_id=pb_id,
+            pbi_id=None,
+            pbc_id=None
+        )
+
+        print(f"Created test recommendation with ID: {recommendation_id}")
+
+        # Verify recommendation exists
+        recommendation = dao.get_recommendation(db_conn.get_actual_db_id(), recommendation_id)
+        assert recommendation is not None, "Test recommendation was not created"
+        assert recommendation.description == test_description
+
+        # Test the delete endpoint via HTTP POST
+        delete_url = f"{app_url}/recommendation/{recommendation_id}/delete"
+
+        # Make POST request to delete the recommendation
+        response = requests.post(delete_url, timeout=10)
+
+        # Should redirect to recommendations page after successful deletion
+        assert response.status_code == 200 or response.status_code == 302, f"Delete request failed with status {response.status_code}"
+
+        # Verify recommendation was actually deleted from database
+        deleted_recommendation = dao.get_recommendation(db_conn.get_actual_db_id(), recommendation_id)
+        assert deleted_recommendation is None, "Recommendation was not actually deleted from database"
+
+        print(f"✓ Successfully deleted recommendation #{recommendation_id}")
 
 
 if __name__ == "__main__":

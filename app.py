@@ -1,7 +1,7 @@
 
 import os
 import json
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for, flash
 import pyodbc
 import markdown
 from markupsafe import Markup
@@ -19,6 +19,7 @@ connections = db_dao.get_all_db_connections()
 
 load_dotenv()
 app = Flask(__name__)
+app.secret_key = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
 
 def get_procedure_name(display_name: str) -> str:
     """Convert display name to actual procedure name for database operations"""
@@ -603,6 +604,30 @@ def recommendation_detail(id_recom):
                              actual_db_id=db_conn.get_actual_db_id())
     except (pyodbc.Error, ValueError) as e:
         return get_database_error_message(e, "loading recommendation")
+
+@app.route("/recommendation/<int:id_recom>/delete", methods=['POST'])
+def delete_recommendation(id_recom):
+    """Delete a specific recommendation"""
+    try:
+        # First check if recommendation exists
+        recommendation = dao.get_recommendation(db_conn.get_actual_db_id(), id_recom)
+
+        if not recommendation:
+            flash("Recommendation not found.", "error")
+            return redirect(url_for('recommendations'))
+
+        # Delete the recommendation
+        deleted = dao.delete_recommendation(id_recom)
+
+        if deleted:
+            flash(f"Recommendation #{id_recom} has been successfully deleted.", "success")
+        else:
+            flash("Failed to delete recommendation.", "error")
+
+        return redirect(url_for('recommendations'))
+
+    except (pyodbc.Error, ValueError) as e:
+        return get_database_error_message(e, "deleting recommendation")
 
 PORT = int(os.getenv("APP_PORT", '5001'))
 
