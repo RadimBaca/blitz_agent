@@ -344,7 +344,7 @@ def _load_specialized_prompt(procedure_name, record, database: str) -> str:
     elif version == 2:
         if procedure_name == "sp_BlitzIndex" and record.more_info is not None:
             try:
-                dao.process_over_indexing_analysis(record)
+                # dao.process_over_indexing_analysis(record)
                 db_indexes = dao.get_db_indexes(record.pbi_id)
 
                 # Determine which type of analysis this is
