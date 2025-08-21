@@ -1,6 +1,5 @@
 
 import os
-import json
 from flask import Flask, render_template, request, redirect, url_for, flash
 import pyodbc
 import markdown
@@ -510,34 +509,38 @@ def analyze(display_name, rec_id):
         chat_history = dao.get_chat_history(procedure_name, rec_id)
         if not chat_history:
             # Special handling for Over-Indexing, Redundant Indexes, and Heap analysis BlitzIndex records
-            print(f"Procedure name: {procedure_name}, record.finding: {record.finding}")
-            user_question = None
-            if (procedure_name == "sp_BlitzIndex" and
-                record.finding and (record.finding.startswith("Over-Indexing") or
-                                  record.finding.startswith("Redundant Indexes") or
-                                  "Heap with a Nonclustered Primary Key" in record.finding)):
+            # print(f"Procedure name: {procedure_name}, record.finding: {record.finding}")
+            # user_question = None
+            # if (procedure_name == "sp_BlitzIndex" and
+            #     record.finding and (record.finding.startswith("Over-Indexing") or
+            #                       record.finding.startswith("Redundant Indexes") or
+            #                       "Heap with a Nonclustered Primary Key" in record.finding)):
 
-                try:
-                    # Execute the SQL command using the refactored method
-                    dao.process_over_indexing_analysis(record)
+            #     try:
+            #         # Execute the SQL command using the refactored method
+            #         dao.process_over_indexing_analysis(record)
 
-                    # Get the stored index data for analysis
-                    db_indexes = dao.get_db_indexes(record.pbi_id)
+            #         # Get the stored index data for analysis
+            #         db_indexes = dao.get_db_indexes(record.pbi_id)
 
-                    # Load the specialized prompt (handles both over-indexing and heap analysis)
-                    user_question = blitz_agent._load_specialized_prompt(
-                        record, db_indexes, db_conn.get_actual_db_name()
-                    )
-                except (pyodbc.Error, ValueError, KeyError) as e:
-                    analysis_type = "over-indexing" if record.finding.startswith("Over-Indexing") else "heap analysis"
-                    print(f"Error processing {analysis_type}: {e}")
+            #         # Load the specialized prompt (handles both over-indexing and heap analysis)
+            #         user_question = blitz_agent._load_specialized_prompt(
+            #             record, db_indexes, db_conn.get_actual_db_name()
+            #         )
+            #     except (pyodbc.Error, ValueError, KeyError) as e:
+            #         analysis_type = "over-indexing" if record.finding.startswith("Over-Indexing") else "heap analysis"
+            #         print(f"Error processing {analysis_type}: {e}")
 
-            if user_question is None:
-                # Standard analysis for other types
-                raw_record_data = json.loads(record.raw_record) if record.raw_record else {}
-                user_question = blitz_agent._load_prompt_for(
-                    procedure_name, raw_record_data, db_conn.get_actual_db_name()
-                )
+            # if user_question is None:
+            #     # Standard analysis for other types
+                # raw_record_data = json.loads(record.raw_record) if record.raw_record else {}
+            #     user_question = blitz_agent._load_prompt_for(
+            #         procedure_name, raw_record_data, db_conn.get_actual_db_name()
+            #     )
+            #     Load the specialized prompt (handles both over-indexing and heap analysis)
+            user_question = blitz_agent._load_specialized_prompt(
+                procedure_name, record, db_conn.get_actual_db_name()
+            )
 
             print(f"Initial user question: {user_question}")
             # For display purposes, show the formatted record data

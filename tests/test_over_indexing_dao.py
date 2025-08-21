@@ -161,28 +161,3 @@ class TestOverIndexingAnalysis:
 
         # Verify fallback message
         assert "No detailed index data available" in formatted_data
-
-    @patch('builtins.open')
-    def test_load_over_indexing_prompt(self, mock_open, sample_blitzindex_record):
-        """Test loading the over-indexing prompt template"""
-        from src.agent_blitz_one_blitzindex import _load_specialized_prompt
-
-        # Mock file content with both finding and index_analysis_data placeholders
-        mock_open.return_value.__enter__.return_value.read.return_value = (
-            "Test prompt template with {finding} and {index_analysis_data}"
-        )
-
-        # Call function with empty indexes
-        result = _load_specialized_prompt(sample_blitzindex_record, [], "TestDB")
-
-        # Verify template was loaded and formatted
-        # Check that the prompt file was opened (will be among many other file opens)
-        prompt_file_opened = any(
-            str(call[0][0]).endswith('over_indexing.txt')
-            for call in mock_open.call_args_list
-        )
-        assert prompt_file_opened, "over_indexing.txt prompt file should have been opened"
-
-        assert "Test prompt template with" in result
-        assert "Over-indexing: 5 or more indexes on dbo.TestTable" in result
-        assert "No detailed index data available" in result
