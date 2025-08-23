@@ -245,10 +245,10 @@ class TestAppIntegration:
         cursor.close()
         conn.close()
 
-        assert result is not None, "No priority 10 record found to get rec_id"
-        rec_id = result[0]
+        assert result is not None, "No priority 10 record found to get procedure_order"
+        procedure_order = result[0]
         finding = result[1]
-        print(f"✓ Found priority 10 record with rec_id: {rec_id}, finding: {finding}")
+        print(f"✓ Found priority 10 record with procedure_order: {procedure_order}, finding: {finding}")
 
         # Verify it's an over-indexing record
         assert finding and finding.startswith("Over-Indexing"), f"Expected Over-Indexing finding, got: {finding}"
@@ -257,8 +257,8 @@ class TestAppIntegration:
         # Step 8: Call analyze endpoint for the priority 10 record
         print("Step 8: Calling analyze endpoint for over-indexing analysis...")
 
-        analyze_url = f"{app_url}/analyze/Blitz Index/{rec_id}"
-        response = requests.get(analyze_url, timeout=300)  # Increased to 5 minutes for LLM processing
+        analyze_url = f"{app_url}/analyze/Blitz Index/{procedure_order}"
+        response = requests.get(analyze_url, timeout=300)  # 5 minutes for LLM processing
         print(f"Analyze endpoint response status: {response.status_code}")
 
         # Assert that the analyze endpoint call was successful
@@ -276,9 +276,9 @@ class TestAppIntegration:
         SELECT pbi_id
         FROM Procedure_blitzindex
         WHERE priority = 10 AND procedure_order = ?
-        """, (rec_id,))
+        """, (procedure_order,))
         pbi_result = cursor.fetchone()
-        assert pbi_result is not None, f"Could not find pbi_id for rec_id {rec_id}"
+        assert pbi_result is not None, f"Could not find pbi_id for rec_id {procedure_order}"
         pbi_id = pbi_result[0]
 
         # Now check how many DB_Indexes records were created for this pbi_id
@@ -296,6 +296,21 @@ class TestAppIntegration:
         # Assert that exactly 12 records were inserted (Product table has 12 indexes)
         assert db_indexes_count == 12, f"Expected 12 DB_Indexes records for Product table, but found {db_indexes_count}"
         print("✓ Confirmed 12 DB_Indexes records created for Product table over-indexing analysis")
+
+
+        # Step 10: Call index_details end point
+        print("Step 10: Calling index_details endpoint...")
+        index_details_url = f"{app_url}/index_details/{procedure_order}"
+        response = requests.get(index_details_url, timeout=10)  # 10 seconds timeout for database response
+        print(f"Index details endpoint response status: {response.status_code}")
+
+        # Assert that the index details endpoint call was successful
+        assert response.status_code in [200, 302], f"Index details endpoint failed with status {response.status_code}. Response: {response.text[:500]}"
+        print("✓ Index details endpoint called successfully")
+
+        # Check that the response contains <table class="indexes-table">
+        assert '<table class="indexes-table">' in response.text, "Index details table not found in response"
+
 
         print("Integration test completed successfully!")
 
@@ -315,20 +330,20 @@ class TestAppIntegration:
 
         # Get a valid pb_id from existing data
         conn = _get_conn()
-        cursor = conn.execute("SELECT pb_id FROM Procedure_blitz LIMIT 1")
+        cursor = conn.execute("SELECT pbi_id FROM Procedure_blitzindex LIMIT 1")
         row = cursor.fetchone()
 
         if not row:
-            pytest.skip("No Procedure_blitz records found for testing")
+            pytest.skip("No Procedure_blitzindex records found for testing")
 
-        pb_id = row[0]
+        pbi_id = row[0]
 
         # Insert test recommendation
         recommendation_id = dao.insert_recommendation(
             description=test_description,
             sql_command=test_sql,
-            pb_id=pb_id,
-            pbi_id=None,
+            pbi_id=pbi_id,
+            pb_id=None,
             pbc_id=None
         )
 
