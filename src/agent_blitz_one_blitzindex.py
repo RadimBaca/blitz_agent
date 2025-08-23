@@ -244,50 +244,6 @@ def execute(procedure: str, record_id: int, user_input: str, chat_history: list)
 
 
 
-
-def _load_prompt_for(procedure: str, finding: str, database: str) -> str:
-    """
-    Load a prompt template for a given procedure and populate placeholders.
-
-    Behavior is driven by the `VERSION` in the `.env` file at project root.
-    VERSION=1 -> use `prompts/general_sp_blitz.txt`
-    VERSION=2 -> prefer `db/prompts/{procedure}.txt`, fallback to general
-    """
-    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-    version = int(os.getenv("VERSION", '1'))
-
-    prompts_dir = os.path.join(project_root, "db", "prompts")
-    specific_prompt_file = os.path.join(prompts_dir, f"{procedure}.txt")
-    general_prompt_file = os.path.join(project_root, "prompts", "general_sp_blitz.txt")
-
-    template = None
-    if version == 2:
-        # Try procedure-specific prompt first
-        try:
-            if os.path.exists(specific_prompt_file):
-                with open(specific_prompt_file, "r") as f:
-                    template = f.read()
-            elif os.path.exists(general_prompt_file):
-                with open(general_prompt_file, "r") as f:
-                    template = f.read()
-        except Exception:
-            return None
-    if version == 1:
-        # Version 1: use the generic prompt
-        try:
-            if os.path.exists(general_prompt_file):
-                with open(general_prompt_file, "r") as f:
-                    template = f.read()
-        except Exception:
-            return None
-
-    if not template:
-        return None
-
-    return template.format(procedure=procedure, finding=finding, database=database)
-
-
 def execute_more_info_query(more_info_sql: str) -> List[Dict[str, Any]]:
     """
     Execute the more_info SQL command from BlitzIndex to get detailed index information.
@@ -319,7 +275,7 @@ def execute_more_info_query(more_info_sql: str) -> List[Dict[str, Any]]:
         return []
 
 
-def _load_specialized_prompt(procedure_name, record, database: str) -> str:
+def load_specialized_prompt(procedure_name, record, database: str) -> str:
     """
     Load specialized prompt templates based on the finding type and populate with index data.
     Supports over-indexing, redundant indexes, and heap analysis findings.
@@ -535,7 +491,7 @@ def _format_heap_data_for_prompt(record, db_indexes: List[DBIndexRecord]) -> str
 if __name__ == "__main__":
     # Quick smoke test
     ONE_BLITZINDEX_ROW = "redundand index found: [schema].[table].[index] (indexid=1)"
-    user_question = _load_prompt_for(
+    user_question = load_specialized_prompt(
         "sp_BlitzIndex",
         ONE_BLITZINDEX_ROW,
         os.getenv("MSSQL_DB") or "<unknown_db>"

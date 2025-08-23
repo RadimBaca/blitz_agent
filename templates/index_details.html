@@ -1,0 +1,386 @@
+{% extends "base.html" %}
+
+{% block title %}Index Details - Blitz Dashboard{% endblock %}
+
+{% block page_header %}Index Analysis Details{% endblock %}
+
+{% block content %}
+
+<div class="index-details-container">
+
+    <!-- Control Buttons -->
+    <div class="control-buttons">
+        <a href="{{ url_for('procedure', display_name='Blitz Index') }}" class="btn btn-back">← Back to Blitz Index</a>
+        {% if blitzindex_record.more_info and blitzindex_record.more_info.lower().startswith('exec') %}
+        <form method="post" style="display: inline;">
+            <input type="hidden" name="action" value="reload">
+            <button type="submit" class="btn btn-reload">Reload Data</button>
+        </form>
+        {% endif %}
+    </div>
+
+    <!-- BlitzIndex Record Information -->
+    <div class="record-info">
+        <h2>BlitzIndex Record</h2>
+        <table class="record-table">
+            <tr>
+                <td><strong>Finding:</strong></td>
+                <td>{{ blitzindex_record.finding or 'N/A' }}</td>
+            </tr>
+            <tr>
+                <td><strong>Schema.Table.Index:</strong></td>
+                <td>{{ blitzindex_record.details_schema_table_index_indexid or 'N/A' }}</td>
+            </tr>
+            <tr>
+                <td><strong>Priority:</strong></td>
+                <td>{{ blitzindex_record.priority or 'N/A' }}</td>
+            </tr>
+            {% if blitzindex_record.database_name %}
+            <tr>
+                <td><strong>Database:</strong></td>
+                <td>{{ blitzindex_record.database_name }}</td>
+            </tr>
+            {% endif %}
+            {% if blitzindex_record.schema_name %}
+            <tr>
+                <td><strong>Schema:</strong></td>
+                <td>{{ blitzindex_record.schema_name }}</td>
+            </tr>
+            {% endif %}
+            {% if blitzindex_record.table_name %}
+            <tr>
+                <td><strong>Table:</strong></td>
+                <td>{{ blitzindex_record.table_name }}</td>
+            </tr>
+            {% endif %}
+            <tr>
+                <td><strong>More Info:</strong></td>
+                <td><code>{{ blitzindex_record.more_info or 'N/A' }}</code></td>
+            </tr>
+        </table>
+    </div>
+
+
+    <!-- Index Information -->
+    {% if db_indexes %}
+    <div class="indexes-section">
+        <h2>Database Indexes ({{ db_indexes|length }})</h2>
+        <div class="table-container">
+            <table class="indexes-table">
+                <thead>
+                    <tr>
+                        <th>Schema.Object.Index</th>
+                        <th>Index Definition</th>
+                        <th>Fill Factor</th>
+                        <th>Usage Summary</th>
+                        <th>Size Summary</th>
+                        <th>Create Date</th>
+                        <th>Show SQL Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for index in db_indexes %}
+                    <tr>
+                        <td class="index-name">{{ index.db_schema_object_indexid or 'N/A' }}</td>
+                        <td class="index-definition">{{ index.index_definition or 'N/A' }}</td>
+                        <td>{{ index.fill_factor or 'N/A' }}</td>
+                        <td class="usage-summary">{{ index.index_usage_summary or 'N/A' }}</td>
+                        <td class="size-summary">{{ index.index_size_summary or 'N/A' }}</td>
+                        <td>{{ index.create_date or 'N/A' }}</td>
+                        <td>
+                            {% if index.create_tsql %}
+                            <button type="button" onclick="showCreateSQL({{ loop.index }})" class="btn btn-small">Create SQL</button>
+                            {% endif %}
+                            {% if index.drop_tsql %}
+                            <button type="button" onclick="showDropSQL({{ loop.index }})" class="btn btn-small">Drop SQL</button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <!-- Hidden rows for SQL display -->
+                    {% if index.create_tsql %}
+                    <tr id="create-sql-{{ loop.index }}" class="sql-row" style="display: none;">
+                        <td colspan="7">
+                            <div class="sql-content">
+                                <strong>Create SQL:</strong>
+                                <pre><code>{{ index.create_tsql }}</code></pre>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endif %}
+                    {% if index.drop_tsql %}
+                    <tr id="drop-sql-{{ loop.index }}" class="sql-row" style="display: none;">
+                        <td colspan="7">
+                            <div class="sql-content">
+                                <strong>Drop SQL:</strong>
+                                <pre><code>{{ index.drop_tsql }}</code></pre>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Missing Index Findings -->
+    {% if db_findings %}
+    <div class="findings-section">
+        <h2>Missing Index Findings ({{ db_findings|length }})</h2>
+        <div class="table-container">
+            <table class="findings-table">
+                <thead>
+                    <tr>
+                        <th>Finding</th>
+                        <th>Estimated Benefit</th>
+                        <th>Estimated Impact</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for finding in db_findings %}
+                    <tr>
+                        <td class="finding-text">{{ finding.finding or 'N/A' }}</td>
+                        <td class="benefit">{{ finding.estimated_benefit or 'N/A' }}</td>
+                        <td class="impact">{{ finding.estimated_impact or 'N/A' }}</td>
+                        <td>
+                            {% if finding.create_tsql %}
+                            <button type="button" onclick="showFindingSQL({{ loop.index }})" class="btn btn-small">Create SQL</button>
+                            {% endif %}
+                            {% if finding.url %}
+                            <a href="{{ finding.url }}" target="_blank" class="btn btn-small">Info</a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <!-- Hidden rows for SQL and details -->
+                    {% if finding.create_tsql or finding.missing_index_request %}
+                    <tr id="finding-details-{{ loop.index }}" class="sql-row" style="display: none;">
+                        <td colspan="4">
+                            <div class="sql-content">
+                                {% if finding.create_tsql %}
+                                <div class="sql-section">
+                                    <strong>Create SQL:</strong>
+                                    <pre><code>{{ finding.create_tsql }}</code></pre>
+                                </div>
+                                {% endif %}
+                                {% if finding.missing_index_request %}
+                                <div class="details-section">
+                                    <strong>Missing Index Request:</strong>
+                                    <pre>{{ finding.missing_index_request }}</pre>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if not db_indexes and not db_findings %}
+    <div class="no-data">
+        <h3>No Index Details Available</h3>
+        {% if not blitzindex_record.index_findings_loaded %}
+        <p>Index details have not been loaded yet. {% if blitzindex_record.more_info and blitzindex_record.more_info.lower().startswith('exec') %}Click "Reload Data" to load the details.{% else %}No EXEC command found in the more_info field.{% endif %}</p>
+        {% else %}
+        <p>No index or finding data was returned by the analysis.</p>
+        {% endif %}
+    </div>
+    {% endif %}
+
+</div>
+
+{% endblock %}
+
+{% block script %}
+<script>
+function showCreateSQL(indexId) {
+    const row = document.getElementById('create-sql-' + indexId);
+    if (row.style.display === 'none') {
+        row.style.display = 'table-row';
+    } else {
+        row.style.display = 'none';
+    }
+}
+
+function showDropSQL(indexId) {
+    const row = document.getElementById('drop-sql-' + indexId);
+    if (row.style.display === 'none') {
+        row.style.display = 'table-row';
+    } else {
+        row.style.display = 'none';
+    }
+}
+
+function showFindingSQL(findingId) {
+    const row = document.getElementById('finding-details-' + findingId);
+    if (row.style.display === 'none') {
+        row.style.display = 'table-row';
+    } else {
+        row.style.display = 'none';
+    }
+}
+</script>
+
+<style>
+.index-details-container {
+    max-width: 100%;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.record-info {
+    background: #f5f5f5;
+    padding: 20px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+}
+
+.record-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.record-table td {
+    padding: 8px;
+    border-bottom: 1px solid #ddd;
+    vertical-align: top;
+}
+
+.record-table td:first-child {
+    width: 200px;
+    font-weight: bold;
+}
+
+.control-buttons {
+    margin: 20px 0;
+    text-align: left;
+}
+
+.btn {
+    display: inline-block;
+    padding: 8px 16px;
+    margin-right: 10px;
+    text-decoration: none;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.btn-back {
+    background-color: #6c757d;
+    color: white;
+}
+
+.btn-reload {
+    background-color: #007bff;
+    color: white;
+}
+
+.btn-small {
+    padding: 4px 8px;
+    font-size: 12px;
+    background-color: #28a745;
+    color: white;
+    margin-right: 5px;
+}
+
+.indexes-section, .findings-section {
+    margin: 30px 0;
+}
+
+.table-container {
+    overflow-x: auto;
+}
+
+.indexes-table, .findings-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+
+.indexes-table th, .indexes-table td,
+.findings-table th, .findings-table td {
+    padding: 8px;
+    border: 1px solid #ddd;
+    text-align: left;
+    vertical-align: top;
+}
+
+.indexes-table th, .findings-table th {
+    background-color: #f8f9fa;
+    font-weight: bold;
+}
+
+.index-name, .finding-text {
+    font-family: monospace;
+    font-size: 12px;
+}
+
+.index-definition {
+    max-width: 300px;
+    word-wrap: break-word;
+    font-family: monospace;
+    font-size: 11px;
+}
+
+.usage-summary, .size-summary {
+    max-width: 200px;
+    word-wrap: break-word;
+    font-size: 12px;
+}
+
+.sql-row td {
+    background-color: #f8f9fa;
+}
+
+.sql-content {
+    padding: 10px;
+}
+
+.sql-section, .details-section {
+    margin-bottom: 15px;
+}
+
+.sql-content pre {
+    background-color: #f4f4f4;
+    padding: 10px;
+    border-radius: 4px;
+    overflow-x: auto;
+    font-size: 12px;
+    margin: 5px 0;
+}
+
+.sql-content code {
+    font-family: 'Courier New', monospace;
+}
+
+.no-data {
+    text-align: center;
+    padding: 40px;
+    background-color: #f8f9fa;
+    border-radius: 5px;
+    margin: 20px 0;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 5px;
+}
+
+.details-btn {
+    background-color: #17a2b8;
+    color: white;
+    padding: 4px 8px;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 12px;
+}
+</style>
+{% endblock %}

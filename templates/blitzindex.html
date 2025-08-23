@@ -85,7 +85,7 @@
                             <th>Finding</th>
                             <th>Details: schema.table.index(indexid)</th>
                             <th>Priority</th>
-                            <th>Action</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -103,9 +103,16 @@
                                 <td class="index-details">{{ rec.details_schema_table_index_indexid if rec.details_schema_table_index_indexid else '' }}</td>
                                 <td>{{ rec.priority if rec.priority else '' }}</td>
                                 <td>
-                                    <form method="get" action="{{ url_for('analyze', display_name=proc_name, rec_id=rec._rec_id) }}">
-                                        <button type="submit">Analyze</button>
-                                    </form>
+                                    <div class="action-buttons">
+                                        <form method="get" action="{{ url_for('analyze', display_name=proc_name, procedure_order=rec._rec_id) }}" style="display: inline;">
+                                            <button type="submit">Analyze</button>
+                                        </form>
+                                        {% if rec.more_info and rec.more_info.lower().startswith('exec') %}
+                                        <form method="get" action="{{ url_for('index_details', procedure_order=rec._rec_id) }}" style="display: inline;">
+                                            <button type="submit" class="details-btn">Details</button>
+                                        </form>
+                                        {% endif %}
+                                    </div>
                                 </td>
                             </tr>
                         {% endfor %}

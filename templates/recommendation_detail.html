@@ -39,11 +39,11 @@
                         <div class="col-md-3"><strong>Related Procedure:</strong></div>
                         <div class="col-md-9">
                             {% if recommendation.pb_id %}
-                                <a href="{{ url_for('analyze', display_name='Blitz', rec_id=recommendation.pb_procedure_order) }}">Blitz</a> (Record ID: {{ recommendation.pb_id }})
+                                <a href="{{ url_for('analyze', display_name='Blitz', procedure_order=recommendation.pb_procedure_order) }}">Blitz</a> (Record ID: {{ recommendation.pb_id }})
                             {% elif recommendation.pbi_id %}
-                                <a href="{{ url_for('analyze', display_name='Blitz Index', rec_id=recommendation.pbi_procedure_order) }}">Blitz Index</a> (Record ID: {{ recommendation.pbi_id }})
+                                <a href="{{ url_for('analyze', display_name='Blitz Index', procedure_order=recommendation.pbi_procedure_order) }}">Blitz Index</a> (Record ID: {{ recommendation.pbi_id }})
                             {% elif recommendation.pbc_id %}
-                                <a href="{{ url_for('analyze', display_name='Blitz Cache', rec_id=recommendation.pbc_procedure_order) }}">Blitz Cache</a> (Record ID: {{ recommendation.pbc_id }})
+                                <a href="{{ url_for('analyze', display_name='Blitz Cache', procedure_order=recommendation.pbc_procedure_order) }}">Blitz Cache</a> (Record ID: {{ recommendation.pbc_id }})
                             {% endif %}
                         </div>
                     </div>
@@ -64,11 +64,11 @@
                     </form>
 
                     {% if recommendation.pb_id %}
-                        <a href="{{ url_for('analyze', display_name='Blitz', rec_id=recommendation.pb_procedure_order) }}" class="btn btn-primary">View Related Blitz Analysis</a>
+                        <a href="{{ url_for('analyze', display_name='Blitz', procedure_order=recommendation.pb_procedure_order) }}" class="btn btn-primary">View Related Blitz Analysis</a>
                     {% elif recommendation.pbi_id %}
-                        <a href="{{ url_for('analyze', display_name='Blitz Index', rec_id=recommendation.pbi_procedure_order) }}" class="btn btn-primary">View Related Blitz Index Analysis</a>
+                        <a href="{{ url_for('analyze', display_name='Blitz Index', procedure_order=recommendation.pbi_procedure_order) }}" class="btn btn-primary">View Related Blitz Index Analysis</a>
                     {% elif recommendation.pbc_id %}
-                        <a href="{{ url_for('analyze', display_name='Blitz Cache', rec_id=recommendation.pbc_procedure_order) }}" class="btn btn-primary">View Related Blitz Cache Analysis</a>
+                        <a href="{{ url_for('analyze', display_name='Blitz Cache', procedure_order=recommendation.pbc_procedure_order) }}" class="btn btn-primary">View Related Blitz Cache Analysis</a>
                     {% endif %}
                 </div>
             </div>

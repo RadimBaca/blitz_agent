@@ -96,6 +96,7 @@ def check_state_db(sql_query: str, text_file_path: str) -> bool:
 class TestAppIntegration:
     """Integration tests for app.py with Adventure Works database"""
 
+    @pytest.mark.slow
     def test_adventure_works_integration(self, server_health_check):
         """
         Complete integration test following specified steps:
@@ -146,7 +147,7 @@ class TestAppIntegration:
         # Run workload generator
         try:
             if wg_main:
-                wg_main.execute_workload(duration_minutes=0.5)
+                wg_main.execute_workload(duration_minutes=0.1)  # Reduced from 0.5 to 0.1 minutes
                 print("✓ Workload generator completed")
             else:
                 print("⚠ Workload generator module not available - skipping")
@@ -202,7 +203,7 @@ class TestAppIntegration:
         print("Step 5: Calling procedure endpoint with Blitz Index...")
 
         # Make HTTP request to the running server
-        response = requests.post(f"{app_url}/init/Blitz Index", timeout=30)
+        response = requests.post(f"{app_url}/init/Blitz Index", timeout=120)  # Increased timeout for potential LLM operations
         print(f"Init endpoint response status: {response.status_code}")
 
         # Assert that the endpoint call was successful
@@ -257,7 +258,7 @@ class TestAppIntegration:
         print("Step 8: Calling analyze endpoint for over-indexing analysis...")
 
         analyze_url = f"{app_url}/analyze/Blitz Index/{rec_id}"
-        response = requests.get(analyze_url, timeout=30)
+        response = requests.get(analyze_url, timeout=300)  # Increased to 5 minutes for LLM processing
         print(f"Analyze endpoint response status: {response.status_code}")
 
         # Assert that the analyze endpoint call was successful

@@ -78,6 +78,58 @@ def get_database_error_message(error: Exception, context: str = "operation", dis
 
     return html_response, 500
 
+def load_indexes_findings(record):
+    """Load index findings for a BlitzIndex record if not already loaded."""
+    if not record.index_findings_loaded and record.more_info and record.more_info.lower().startswith("exec"):
+        print(f"Processing more_info for {record.more_info}")
+        try:
+            dao.process_more_info(record)
+        except (pyodbc.Error, ValueError, KeyError) as e:
+            flash(f"Error loading index details: {str(e)}", "error")
+
+
+def perform_initial_analysis(procedure_name, record, procedure_order):
+    """Perform the initial automated analysis for a record and store chat history.
+
+    Returns the created chat_history list.
+    """
+    # Special handling: if BlitzIndex and more_info contains an EXEC, try to load index details
+    if (procedure_name == "sp_BlitzIndex" and
+        record.more_info and record.more_info.lower().startswith("exec")):
+        try:
+            dao.process_more_info(record)
+        except (pyodbc.Error, ValueError, KeyError) as e:
+            print(f"Error processing {record.more_info}: {e}")
+
+    user_question = blitz_agent.load_specialized_prompt(
+        procedure_name, record, db_conn.get_actual_db_name()
+    )
+
+    print(f"Initial user question: {user_question}")
+    # For display purposes, show the formatted record data
+    record_dict = record.model_dump()
+    record_dict.pop("raw_record", None)
+    store_user_question = "\n".join(f"**{k}**: {v}" for k, v in record_dict.items())
+
+    # Get the actual record ID (pb_id, pbi_id, or pbc_id) for recommendations
+    actual_record_id = getattr(record, PROCEDURES_ID_MAPPING.get(procedure_name, "pb_id"))
+
+    try:
+        result = blitz_agent.execute(
+            procedure=procedure_name,
+            record_id=actual_record_id,
+            user_input=user_question,
+            chat_history=[]
+        )
+        chat_history = [("user", store_user_question), ("ai", result["output"])]
+        dao.store_chat_history(procedure_name, procedure_order, chat_history)
+    except Exception as e:
+        # Handle agent execution errors gracefully
+        error_message = f"Analysis failed due to a technical issue: {str(e)}. Please try again."
+        chat_history = [("user", store_user_question), ("ai", error_message)]
+        app.logger.error(f"Agent execution failed: {str(e)}")
+
+    return chat_history
 
 # Seznam podporovaných procedur
 PROCEDURES = {
@@ -481,16 +533,16 @@ def init(display_name):
     except (pyodbc.Error, ValueError) as e:
         return get_database_error_message(e, "initialization", display_name)
 
-@app.route("/analyze/<display_name>/<int:rec_id>", methods=["GET", "POST"])
-def analyze(display_name, rec_id):
+@app.route("/analyze/<display_name>/<int:procedure_order>", methods=["GET", "POST"])
+def analyze(display_name, procedure_order):
     try:
         procedure_name = get_procedure_name(display_name)
-        record = dao.get_record(procedure_name, rec_id)
+        record = dao.get_record(procedure_name, procedure_order, db_conn.get_actual_db_id())
 
         if request.method == "POST":
             user_input = request.form["user_input"]
             # TODO - replace with just adding to chat history (no rewriting)
-            chat_history = dao.get_chat_history(procedure_name, rec_id) or []
+            chat_history = dao.get_chat_history(procedure_name, procedure_order) or []
             chat_history.append(("user", user_input))
 
             # Get the actual record ID (pb_id, pbi_id, or pbc_id) for recommendations
@@ -503,52 +555,18 @@ def analyze(display_name, rec_id):
                 chat_history=chat_history
             )
             chat_history.append(("ai", result["output"]))
-            dao.store_chat_history(procedure_name, rec_id, chat_history)
-            return redirect(url_for("analyze", display_name=display_name, rec_id=rec_id))
+            dao.store_chat_history(procedure_name, procedure_order, chat_history)
+            return redirect(url_for("analyze", display_name=display_name, rec_id=procedure_order))
 
-        chat_history = dao.get_chat_history(procedure_name, rec_id)
+        chat_history = dao.get_chat_history(procedure_name, procedure_order)
         if not chat_history:
 
-            if (procedure_name == "sp_BlitzIndex" and
-                record.more_info.lower().startswith("exec")):
-                try:
-                    # Execute the SQL command using the refactored method
-                    dao.process_over_indexing_analysis(record)
-
-                except (pyodbc.Error, ValueError, KeyError) as e:
-                    print(f"Error processing {record.more_info}: {e}")
-
-            user_question = blitz_agent._load_specialized_prompt(
-                procedure_name, record, db_conn.get_actual_db_name()
-            )
-
-            print(f"Initial user question: {user_question}")
-            # For display purposes, show the formatted record data
-            record_dict = record.model_dump()
-            record_dict.pop("raw_record", None)
-            store_user_question = "\n".join(f"**{k}**: {v}" for k, v in record_dict.items())
-
-            # Get the actual record ID (pb_id, pbi_id, or pbc_id) for recommendations
-            actual_record_id = getattr(record, PROCEDURES_ID_MAPPING.get(procedure_name, "pb_id"))
-
-            try:
-                result = blitz_agent.execute(
-                    procedure=procedure_name,
-                    record_id=actual_record_id,
-                    user_input=user_question,
-                    chat_history=[]
-                )
-                chat_history = [("user", store_user_question), ("ai", result["output"])]
-                dao.store_chat_history(procedure_name, rec_id, chat_history)
-            except Exception as e:
-                # Handle agent execution errors gracefully
-                error_message = f"Analysis failed due to a technical issue: {str(e)}. Please try again."
-                chat_history = [("user", store_user_question), ("ai", error_message)]
-                app.logger.error(f"Agent execution failed: {str(e)}")
+            # Perform initial automated analysis and store chat history
+            chat_history = perform_initial_analysis(procedure_name, record, procedure_order)
 
         return render_template("analyze.html",
                             proc_name=display_name,
-                            rec_id=rec_id,
+                            rec_id=procedure_order,
                             chat_history=chat_history,
                             procedures=PROCEDURES,
                             connections=db_dao.get_all_db_connections(),
@@ -592,68 +610,10 @@ def analyze_multiple(display_name):
         # Process each selected record
         for rec_id in selected_rec_ids:
             try:
-                record = dao.get_record(procedure_name, rec_id)
-                if not record:
-                    error_details.append(f"Record {rec_id} not found")
-                    analysis_stats['errors'] += 1
-                    continue
+                record = dao.get_record(procedure_name, rec_id, db_conn.get_actual_db_id())
+                perform_initial_analysis(procedure_name, record, record.procedure_order)
 
-                # Check if record already has analysis
-                chat_history = dao.get_chat_history(procedure_name, rec_id)
-                if chat_history:
-                    analysis_stats['processed_records'] += 1
-                    # Count existing recommendations for this record
-                    actual_record_id = getattr(record, PROCEDURES_ID_MAPPING.get(procedure_name, "pb_id"))
-                    existing_recs = dao.get_recommendations_for_record(procedure_name, actual_record_id)
-                    analysis_stats['recommendations_generated'] += len(existing_recs)
-                    continue
-
-                # Perform analysis similar to the single analyze route
-                print(f"Analyzing record {rec_id}: {record.finding}")
-                user_question = None
-
-                # Special handling for Over-Indexing, Redundant Indexes, and Heap analysis BlitzIndex records
-                if (procedure_name == "sp_BlitzIndex" and
-                    record.finding and (record.finding.startswith("Over-Indexing") or
-                                      record.finding.startswith("Redundant Indexes") or
-                                      record.finding.startswith("Indexes Worth Reviewing"))):
-                    try:
-                        dao.process_over_indexing_analysis(record)
-                        db_indexes = dao.get_db_indexes(record.pbi_id)
-                        user_question = blitz_agent._load_specialized_prompt(
-                            record, db_indexes, db_conn.get_actual_db_name()
-                        )
-                    except (pyodbc.Error, ValueError, KeyError) as e:
-                        analysis_type = "over-indexing" if record.finding.startswith("Over-Indexing") else "heap analysis"
-                        print(f"Error processing {analysis_type} for record {rec_id}: {e}")
-
-                if user_question is None:
-                    # Standard analysis for other types
-                    raw_record_data = json.loads(record.raw_record) if record.raw_record else {}
-                    user_question = blitz_agent._load_prompt_for(
-                        procedure_name, raw_record_data, db_conn.get_actual_db_name()
-                    )
-
-                # For display purposes, show the formatted record data
-                record_dict = record.model_dump()
-                record_dict.pop("raw_record", None)
-                store_user_question = "\n".join(f"**{k}**: {v}" for k, v in record_dict.items())
-
-                # Get the actual record ID (pb_id, pbi_id, or pbc_id) for recommendations
                 actual_record_id = getattr(record, PROCEDURES_ID_MAPPING.get(procedure_name, "pb_id"))
-
-                # Execute analysis
-                result = blitz_agent.execute(
-                    procedure=procedure_name,
-                    record_id=actual_record_id,
-                    user_input=user_question,
-                    chat_history=[]
-                )
-
-                # Store chat history
-                chat_history = [("user", store_user_question), ("ai", result["output"])]
-                dao.store_chat_history(procedure_name, rec_id, chat_history)
-
                 analysis_stats['processed_records'] += 1
 
                 # Count recommendations generated for this record
@@ -744,6 +704,43 @@ def delete_recommendation(id_recom):
 
     except (pyodbc.Error, ValueError) as e:
         return get_database_error_message(e, "deleting recommendation")
+
+
+@app.route("/index_details/<int:procedure_order>", methods=["GET", "POST"])
+def index_details(procedure_order):
+    """Show detailed index and finding information for a BlitzIndex record"""
+    try:
+        # Get the BlitzIndex record
+        blitzindex_record = dao.get_record("sp_BlitzIndex", procedure_order, db_conn.get_actual_db_id())
+        if not blitzindex_record:
+            return "Problem loading Blitz record", 404
+
+        load_indexes_findings(blitzindex_record)
+
+        # Handle reload request
+        if request.method == "POST" and request.form.get("action") == "reload":
+            # Clear existing data
+            dao.clear_index_findings_for_record(blitzindex_record.pbi_id)
+            load_indexes_findings(blitzindex_record)
+
+        # Get indexes and findings
+        db_indexes = dao.get_db_indexes_for_record(blitzindex_record.pbi_id)
+        db_findings = dao.get_db_findings_for_record(blitzindex_record.pbi_id)
+
+        print(f"Found {len(db_indexes)} indexes and {len(db_findings)} findings for pbi_id={procedure_order}")
+
+        return render_template("index_details.html",
+                             proc_name="Blitz Index",
+                             procedures=PROCEDURES,
+                             connections=db_dao.get_all_db_connections(),
+                             actual_db_id=db_conn.get_actual_db_id(),
+                             blitzindex_record=blitzindex_record,
+                             db_indexes=db_indexes,
+                             db_findings=db_findings)
+
+    except (pyodbc.Error, ValueError) as e:
+        return get_database_error_message(e, "loading index details", "Blitz Index")
+
 
 PORT = int(os.getenv("APP_PORT", '5001'))
 

@@ -38,7 +38,11 @@ CREATE TABLE Procedure_blitzindex (
   details_schema_table_index_indexid TEXT,
   priority INTEGER,
   more_info TEXT,
-  raw_record TEXT
+  raw_record TEXT,
+  database_name TEXT,
+  schema_name TEXT,
+  table_name TEXT,
+  index_findings_loaded BOOLEAN DEFAULT FALSE
 );
 
 CREATE TABLE Procedure_blitzcache (
@@ -107,6 +111,19 @@ CREATE TABLE DB_Indexes (
   page_io_latch_wait_time TEXT,
   create_tsql TEXT,
   drop_tsql TEXT
+);
+
+-- New table for storing findings from Q2 queries (Missing index findings)
+CREATE TABLE DB_Findings (
+  df_id INTEGER PRIMARY KEY,
+  pbi_id INTEGER NOT NULL REFERENCES Procedure_blitzindex (pbi_id),
+  finding TEXT,
+  url TEXT,
+  estimated_benefit TEXT,
+  missing_index_request TEXT,
+  estimated_impact TEXT,
+  create_tsql TEXT,
+  sample_query_plan TEXT
 );
 
 -- Table for storing recommendations based on analysis

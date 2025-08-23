@@ -3,7 +3,7 @@ from .connection_DAO import _ensure_db, _get_conn
 from . import db_connection
 from .models import (
     BlitzRecord, BlitzIndexRecord, BlitzCacheRecord,
-    DBIndexRecord, Recommendation,
+    DBIndexRecord, DBFindingRecord, Recommendation,
     PROCEDURE_MODELS, PROCEDURE_TABLE_NAMES,
     PROCEDURE_CHAT_TABLE_NAMES, PROCEDURE_ID_FIELDS, COLUMN_MAPPING,
     RECOMMENDATION_FK_MAPPING
@@ -12,6 +12,7 @@ import json
 import datetime
 import pyodbc
 import sqlparse
+import re
 
 # Initialize database on module import
 _ensure_db()
@@ -59,16 +60,29 @@ def store_records(proc_name: str, records: List[Dict[str, Any]], db_id: int):
         conn.execute("INSERT INTO Procedure_call (run, p_id, db_id) VALUES (datetime('now'), ?, ?)", (p_id, db_id))
         pc_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
 
-        # Get table name
-        table_name = PROCEDURE_TABLE_NAMES[proc_name]
+        # Get table name for database
+        db_table_name = PROCEDURE_TABLE_NAMES[proc_name]
 
         # Insert records using Pydantic models for validation
         for i, raw_record in enumerate(records):
             # Create and validate the Pydantic model
             record_model = _map_raw_record_to_model(proc_name, raw_record, i, pc_id)
 
+            # For BlitzIndex records, extract parameters from EXEC command
+            if proc_name == "sp_BlitzIndex" and hasattr(record_model, 'more_info') and record_model.more_info:
+                database_name, schema_name, table_name = extract_exec_parameters(record_model.more_info)
+                if any([database_name, schema_name, table_name]):
+                    record_model.database_name = database_name
+                    record_model.schema_name = schema_name
+                    record_model.table_name = table_name
+
             # Convert model to dict for database insertion
             model_dict = record_model.model_dump(exclude={'_analyzed'})  # Exclude computed fields
+
+            # Convert boolean values to integers for SQLite compatibility
+            for field, value in model_dict.items():
+                if isinstance(value, bool):
+                    model_dict[field] = int(value)
 
             # Build INSERT statement from validated model data
             fields = []
@@ -80,7 +94,7 @@ def store_records(proc_name: str, records: List[Dict[str, Any]], db_id: int):
 
             if fields:  # Only insert if we have data
                 placeholders = ["?"] * len(fields)
-                sql = f"INSERT INTO {table_name} ({', '.join(fields)}) VALUES ({', '.join(placeholders)})"
+                sql = f"INSERT INTO {db_table_name} ({', '.join(fields)}) VALUES ({', '.join(placeholders)})"
                 conn.execute(sql, values)
 
         conn.commit()
@@ -108,6 +122,10 @@ def get_all_records(proc_name: str, db_id: int) -> List[Union[BlitzRecord, Blitz
         select_fields = [f"r.{field}" for field in column_map.values()]
         select_fields.extend(["r.procedure_order", f"r.{id_field}"])
 
+        # Add special fields for BlitzIndex
+        if proc_name == "sp_BlitzIndex":
+            select_fields.extend(["r.database_name", "r.schema_name", "r.table_name", "r.index_findings_loaded"])
+
         cur = conn.execute(
             f"""
             SELECT {', '.join(select_fields)},
@@ -134,7 +152,12 @@ def get_all_records(proc_name: str, db_id: int) -> List[Union[BlitzRecord, Blitz
             # Add metadata fields
             procedure_order_idx = len(column_map)
             id_field_idx = len(column_map) + 1
-            chat_count_idx = len(column_map) + 2
+
+            # Calculate chat_count index based on procedure type
+            if proc_name == "sp_BlitzIndex":
+                chat_count_idx = len(column_map) + 6  # procedure_order + id_field + 4 special fields
+            else:
+                chat_count_idx = len(column_map) + 2  # procedure_order + id_field
 
             model_data["procedure_order"] = row[procedure_order_idx]
             model_data["pc_id"] = 0  # Not needed for display, but required by model
@@ -144,6 +167,11 @@ def get_all_records(proc_name: str, db_id: int) -> List[Union[BlitzRecord, Blitz
                 model_data["pb_id"] = row[id_field_idx]
             elif proc_name == "sp_BlitzIndex":
                 model_data["pbi_id"] = row[id_field_idx]
+                # Add special BlitzIndex fields
+                model_data["database_name"] = row[id_field_idx + 1]
+                model_data["schema_name"] = row[id_field_idx + 2]
+                model_data["table_name"] = row[id_field_idx + 3]
+                model_data["index_findings_loaded"] = bool(row[id_field_idx + 4]) if row[id_field_idx + 4] is not None else False
             elif proc_name == "sp_BlitzCache":
                 model_data["pbc_id"] = row[id_field_idx]
 
@@ -158,7 +186,7 @@ def get_all_records(proc_name: str, db_id: int) -> List[Union[BlitzRecord, Blitz
         conn.close()
 
 
-def get_record(proc_name: str, rec_id: int) -> Union[BlitzRecord, BlitzIndexRecord, BlitzCacheRecord]:
+def get_record(proc_name: str, procedure_order: int, db_id: int) -> Union[BlitzRecord, BlitzIndexRecord, BlitzCacheRecord]:
     """Get a specific record by procedure name and record ID, returning a Pydantic model instance"""
     _ensure_db()
     conn = _get_conn()
@@ -170,16 +198,20 @@ def get_record(proc_name: str, rec_id: int) -> Union[BlitzRecord, BlitzIndexReco
         select_fields = [f"r.{field}" for field in column_map.values()]
         select_fields.extend([f"r.{id_field}"])
 
+        # Add special fields for BlitzIndex
+        if proc_name == "sp_BlitzIndex":
+            select_fields.extend(["r.database_name", "r.schema_name", "r.table_name", "r.index_findings_loaded"])
+
         cur = conn.execute(
             f"""
             SELECT {', '.join(select_fields)}
             FROM Procedure_call pc
             JOIN Procedure_type pt ON pc.p_id = pt.p_id
             JOIN {table_name} r ON r.pc_id = pc.pc_id
-            WHERE pt.procedure_name = ? AND r.procedure_order = ?
+            WHERE pt.procedure_name = ? AND r.procedure_order = ? AND db_id = ?
             ORDER BY pc.run DESC
             LIMIT 1
-            """, (proc_name, rec_id)
+            """, (proc_name, procedure_order, db_id)
         )
         row = cur.fetchone()
         if not row:
@@ -191,7 +223,7 @@ def get_record(proc_name: str, rec_id: int) -> Union[BlitzRecord, BlitzIndexReco
             model_data[field] = row[i]
 
         # Add required fields
-        model_data["procedure_order"] = rec_id
+        model_data["procedure_order"] = procedure_order
         model_data["pc_id"] = 0  # Not needed for display
         model_data["_analyzed"] = False  # Will be set separately if needed
 
@@ -201,6 +233,11 @@ def get_record(proc_name: str, rec_id: int) -> Union[BlitzRecord, BlitzIndexReco
             model_data["pb_id"] = row[id_field_idx]
         elif proc_name == "sp_BlitzIndex":
             model_data["pbi_id"] = row[id_field_idx]
+            # Add special BlitzIndex fields
+            model_data["database_name"] = row[id_field_idx + 1]
+            model_data["schema_name"] = row[id_field_idx + 2]
+            model_data["table_name"] = row[id_field_idx + 3]
+            model_data["index_findings_loaded"] = bool(row[id_field_idx + 4]) if row[id_field_idx + 4] is not None else False
         elif proc_name == "sp_BlitzCache":
             model_data["pbc_id"] = row[id_field_idx]
 
@@ -369,94 +406,6 @@ def delete_chat_session_by_record_id(proc_name: str, record_pk_id: int):
         conn.close()
 
 
-def store_db_indexes(indexes_data: List[DBIndexRecord], pbi_id: int):
-    """Store DB_Indexes data for a specific BlitzIndex record"""
-    _ensure_db()
-    conn = _get_conn()
-    try:
-        # First delete any existing indexes for this pbi_id
-        conn.execute("DELETE FROM DB_Indexes WHERE pbi_id = ?", (pbi_id,))
-
-        # Insert new index records
-        for index_record in indexes_data:
-            # Ensure pbi_id is set correctly
-            index_record.pbi_id = pbi_id
-
-            # Convert model to dict for database insertion
-            model_dict = index_record.model_dump()
-
-            # Build INSERT statement
-            fields = []
-            values = []
-            for field, value in model_dict.items():
-                if value is not None:  # Only insert non-None values
-                    fields.append(field)
-                    values.append(value)
-
-            if fields:  # Only insert if we have data
-                placeholders = ["?"] * len(fields)
-                sql = f"INSERT INTO DB_Indexes ({', '.join(fields)}) VALUES ({', '.join(placeholders)})"
-                conn.execute(sql, values)
-
-        conn.commit()
-    finally:
-        conn.close()
-
-
-def get_db_indexes(pbi_id: int) -> List[DBIndexRecord]:
-    """Get all DB_Indexes records for a specific BlitzIndex record"""
-    _ensure_db()
-    conn = _get_conn()
-    try:
-        cur = conn.execute("""
-            SELECT di_id, pbi_id, db_schema_object_indexid, index_definition, secret_columns,
-                   fill_factor, index_usage_summary, index_op_stats, index_size_summary,
-                   partition_compression_detail, index_lock_wait_summary, is_referenced_by_foreign_key,
-                   fks_covered_by_index, last_user_seek, last_user_scan, last_user_lookup,
-                   last_user_update, create_date, modify_date, page_latch_wait_count,
-                   page_latch_wait_time, page_io_latch_wait_count, page_io_latch_wait_time,
-                   create_tsql, drop_tsql
-            FROM DB_Indexes
-            WHERE pbi_id = ?
-            ORDER BY di_id
-        """, (pbi_id,))
-
-        records = []
-        for row in cur.fetchall():
-            record_data = {
-                'di_id': row[0],
-                'pbi_id': row[1],
-                'db_schema_object_indexid': row[2],
-                'index_definition': row[3],
-                'secret_columns': row[4],
-                'fill_factor': row[5],
-                'index_usage_summary': row[6],
-                'index_op_stats': row[7],
-                'index_size_summary': row[8],
-                'partition_compression_detail': row[9],
-                'index_lock_wait_summary': row[10],
-                'is_referenced_by_foreign_key': row[11],
-                'fks_covered_by_index': row[12],
-                'last_user_seek': row[13],
-                'last_user_scan': row[14],
-                'last_user_lookup': row[15],
-                'last_user_update': row[16],
-                'create_date': row[17],
-                'modify_date': row[18],
-                'page_latch_wait_count': row[19],
-                'page_latch_wait_time': row[20],
-                'page_io_latch_wait_count': row[21],
-                'page_io_latch_wait_time': row[22],
-                'create_tsql': row[23],
-                'drop_tsql': row[24]
-            }
-            records.append(DBIndexRecord(**record_data))
-
-        return records
-    finally:
-        conn.close()
-
-
 def safe_pretty_json(record: dict) -> dict:
     """Convert record values to safe JSON-serializable format"""
     safe_record = {}
@@ -477,17 +426,16 @@ def safe_pretty_json(record: dict) -> dict:
     return safe_record
 
 
-def process_over_indexing_analysis(record: BlitzIndexRecord) -> List[DBIndexRecord]:
+def process_more_info(record: BlitzIndexRecord) -> Tuple[List[DBIndexRecord], List[DBFindingRecord]]:
     """
     Process over-indexing analysis for BlitzIndex records by executing the more_info SQL
-    and storing the detailed index data.
+    and storing the detailed index data and findings.
 
     Args:
         record: The BlitzIndexRecord containing the more_info SQL to execute
-        db_connection: Database connection object
 
     Returns:
-        List of DBIndexRecord objects containing the processed index data
+        Tuple of (List of DBIndexRecord objects, List of DBFindingRecord objects)
 
     Raises:
         pyodbc.Error: If database operation fails
@@ -495,6 +443,7 @@ def process_over_indexing_analysis(record: BlitzIndexRecord) -> List[DBIndexReco
         KeyError: If required columns are missing
     """
     index_records = []
+    finding_records = []
 
     # Use SQL Server connection for executing more_info SQL
     try:
@@ -507,10 +456,12 @@ def process_over_indexing_analysis(record: BlitzIndexRecord) -> List[DBIndexReco
                 if not cursor.nextset():
                     break
 
+            # Process first result set (Q1 - Index details)
             if cursor.description:
                 columns = [desc[0] for desc in cursor.description]
                 rows = cursor.fetchall()
 
+                # print(f"Fetched {len(rows)} rows from sp_BlitzIndex output")
                 # Convert rows to list of DBIndexRecord objects and skip first row (Q1)
                 for i, row in enumerate(rows):
                     if i == 0:  # Skip first row (Q1)
@@ -562,14 +513,46 @@ def process_over_indexing_analysis(record: BlitzIndexRecord) -> List[DBIndexReco
                     index_record = DBIndexRecord(pbi_id=record.pbi_id, **mapped_data)
                     index_records.append(index_record)
 
-                # Store the detailed index data
-                if index_records:
-                    store_db_indexes(index_records, record.pbi_id)
+            # Process second result set (Q2 - Missing index findings)
+            if cursor.nextset() and cursor.description:
+                columns = [desc[0] for desc in cursor.description]
+                rows = cursor.fetchall()
+
+                # Convert rows to list of DBFindingRecord objects
+                for row in rows:
+                    row_dict = dict(zip(columns, row))
+
+                    # Map columns from Q2 to DBFindingRecord fields
+                    finding_data = {
+                        'pbi_id': record.pbi_id,
+                        'finding': row_dict.get('Finding'),
+                        'url': row_dict.get('URL'),
+                        'estimated_benefit': row_dict.get('Estimated Benefit'),
+                        'missing_index_request': row_dict.get('Missing Index Request'),
+                        'estimated_impact': row_dict.get('Estimated Impact'),
+                        'create_tsql': row_dict.get('Create TSQL'),
+                        'sample_query_plan': row_dict.get('Sample Query Plan')
+                    }
+
+                    # Create DBFindingRecord object
+                    finding_record = DBFindingRecord(**finding_data)
+                    finding_records.append(finding_record)
+
+            print(f"Processed {len(index_records)} index records and {len(finding_records)} findings for PBI ID {record.pbi_id}")
+            # Store the data
+            if index_records:
+                store_db_indexes_for_record(record.pbi_id, [r.model_dump() for r in index_records])
+
+            if finding_records:
+                store_db_findings_for_record(record.pbi_id, [r.model_dump() for r in finding_records])
+
+            # Mark as loaded
+            mark_index_findings_loaded(record.pbi_id)
 
     except (pyodbc.Error, ValueError, KeyError) as e:
         raise e
 
-    return index_records
+    return index_records, finding_records
 
 
 # Recommendation methods
@@ -828,6 +811,75 @@ def get_recommendations_for_record(procedure_name: str, record_id: int) -> List[
         raise e
 
 
+def get_db_indexes(pbi_id: int) -> List[DBIndexRecord]:
+    """
+    Get all DB_Indexes records for a given pbi_id
+
+    Args:
+        pbi_id: The BlitzIndex record ID
+
+    Returns:
+        List of DBIndexRecord objects
+    """
+    _ensure_db()
+    conn = _get_conn()
+    try:
+        cur = conn.execute("""
+            SELECT di_id, pbi_id, db_schema_object_indexid, index_definition,
+                   secret_columns, fill_factor, index_usage_summary, index_op_stats,
+                   index_size_summary, partition_compression_detail, index_lock_wait_summary,
+                   is_referenced_by_foreign_key, fks_covered_by_index, last_user_seek,
+                   last_user_scan, last_user_lookup, last_user_update, create_date,
+                   modify_date, page_latch_wait_count, page_latch_wait_time,
+                   page_io_latch_wait_count, page_io_latch_wait_time, create_tsql, drop_tsql
+            FROM DB_Indexes
+            WHERE pbi_id = ?
+            ORDER BY di_id
+        """, (pbi_id,))
+
+        records = []
+        for row in cur.fetchall():
+            # Convert row to dict
+            row_dict = dict(zip([col[0] for col in cur.description], row))
+            records.append(DBIndexRecord(**row_dict))
+
+        return records
+    finally:
+        conn.close()
+
+
+def get_db_findings(pbi_id: int) -> List[DBFindingRecord]:
+    """
+    Get all DB_Findings records for a given pbi_id
+
+    Args:
+        pbi_id: The BlitzIndex record ID
+
+    Returns:
+        List of DBFindingRecord objects
+    """
+    _ensure_db()
+    conn = _get_conn()
+    try:
+        cur = conn.execute("""
+            SELECT df_id, pbi_id, finding, url, estimated_benefit,
+                   missing_index_request, estimated_impact, create_tsql, sample_query_plan
+            FROM DB_Findings
+            WHERE pbi_id = ?
+            ORDER BY df_id
+        """, (pbi_id,))
+
+        records = []
+        for row in cur.fetchall():
+            # Convert row to dict
+            row_dict = dict(zip([col[0] for col in cur.description], row))
+            records.append(DBFindingRecord(**row_dict))
+
+        return records
+    finally:
+        conn.close()
+
+
 def delete_recommendation(id_recom: int) -> bool:
     """Delete a recommendation by its ID
 
@@ -853,3 +905,224 @@ def delete_recommendation(id_recom: int) -> bool:
     except pyodbc.Error as e:
         conn.rollback()
         raise e
+    finally:
+        conn.close()
+
+
+def extract_exec_parameters(more_info: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    """
+    Extract DatabaseName, SchemaName, and TableName from EXEC command in more_info
+
+    Args:
+        more_info: String containing EXEC command like "EXEC dbo.sp_BlitzIndex @DatabaseName='AdventureWorks2019', @SchemaName='Production', @TableName='Product';"
+
+    Returns:
+        Tuple of (database_name, schema_name, table_name) or (None, None, None) if not found
+    """
+    if not more_info or not more_info.strip().upper().startswith("EXEC"):
+        return None, None, None
+
+    try:
+        # Use regex to extract parameter values
+        database_match = re.search(r"@DatabaseName\s*=\s*['\"]([^'\"]+)['\"]", more_info, re.IGNORECASE)
+        schema_match = re.search(r"@SchemaName\s*=\s*['\"]([^'\"]+)['\"]", more_info, re.IGNORECASE)
+        table_match = re.search(r"@TableName\s*=\s*['\"]([^'\"]+)['\"]", more_info, re.IGNORECASE)
+
+        database_name = database_match.group(1) if database_match else None
+        schema_name = schema_match.group(1) if schema_match else None
+        table_name = table_match.group(1) if table_match else None
+
+        return database_name, schema_name, table_name
+    except (AttributeError, TypeError):
+        return None, None, None
+
+
+def update_blitzindex_exec_parameters(pbi_id: int, more_info: str) -> bool:
+    """
+    Update BlitzIndex record with extracted EXEC parameters
+
+    Args:
+        pbi_id: The procedure_blitzindex record ID
+        more_info: String containing EXEC command
+
+    Returns:
+        True if update was successful, False otherwise
+    """
+    database_name, schema_name, table_name = extract_exec_parameters(more_info)
+
+    if not any([database_name, schema_name, table_name]):
+        return False
+
+    _ensure_db()
+    conn = _get_conn()
+
+    try:
+        conn.execute("""
+            UPDATE Procedure_blitzindex
+            SET database_name = ?, schema_name = ?, table_name = ?
+            WHERE pbi_id = ?
+        """, (database_name, schema_name, table_name, pbi_id))
+
+        conn.commit()
+        return True
+    except pyodbc.Error:
+        conn.rollback()
+        return False
+    finally:
+        conn.close()
+
+
+def get_db_indexes_for_record(pbi_id: int) -> List[DBIndexRecord]:
+    """Get all DB_Indexes for a specific BlitzIndex record"""
+    _ensure_db()
+    conn = _get_conn()
+
+    try:
+        cur = conn.execute("""
+            SELECT di_id, pbi_id, db_schema_object_indexid, index_definition, secret_columns,
+                   fill_factor, index_usage_summary, index_op_stats, index_size_summary,
+                   partition_compression_detail, index_lock_wait_summary, is_referenced_by_foreign_key,
+                   fks_covered_by_index, last_user_seek, last_user_scan, last_user_lookup,
+                   last_user_update, create_date, modify_date, page_latch_wait_count,
+                   page_latch_wait_time, page_io_latch_wait_count, page_io_latch_wait_time,
+                   create_tsql, drop_tsql
+            FROM DB_Indexes
+            WHERE pbi_id = ?
+        """, (pbi_id,))
+
+        records = []
+        for row in cur.fetchall():
+            record_dict = dict(zip([column[0] for column in cur.description], row))
+            records.append(DBIndexRecord(**record_dict))
+
+        return records
+    finally:
+        conn.close()
+
+
+def get_db_findings_for_record(pbi_id: int) -> List[DBFindingRecord]:
+    """Get all DB_Findings for a specific BlitzIndex record"""
+    _ensure_db()
+    conn = _get_conn()
+
+    try:
+        cur = conn.execute("""
+            SELECT df_id, pbi_id, finding, url, estimated_benefit,
+                   missing_index_request, estimated_impact, create_tsql, sample_query_plan
+            FROM DB_Findings
+            WHERE pbi_id = ?
+        """, (pbi_id,))
+
+        records = []
+        for row in cur.fetchall():
+            record_dict = dict(zip([column[0] for column in cur.description], row))
+            records.append(DBFindingRecord(**record_dict))
+
+        return records
+    finally:
+        conn.close()
+
+
+def clear_index_findings_for_record(pbi_id: int):
+    """Clear all DB_Indexes and DB_Findings for a specific BlitzIndex record"""
+    _ensure_db()
+    conn = _get_conn()
+
+    try:
+        conn.execute("DELETE FROM DB_Indexes WHERE pbi_id = ?", (pbi_id,))
+        conn.execute("DELETE FROM DB_Findings WHERE pbi_id = ?", (pbi_id,))
+        conn.execute("UPDATE Procedure_blitzindex SET index_findings_loaded = FALSE WHERE pbi_id = ?", (pbi_id,))
+        conn.commit()
+    except pyodbc.Error:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def store_db_indexes_for_record(pbi_id: int, indexes: List[Dict[str, Any]]):
+    """Store DB_Indexes for a specific BlitzIndex record"""
+    _ensure_db()
+    conn = _get_conn()
+
+    try:
+        # First, delete existing indexes for this pbi_id
+        conn.execute("DELETE FROM DB_Indexes WHERE pbi_id = ?", (pbi_id,))
+
+        for index_data in indexes:
+            # Add pbi_id to each record
+            index_data['pbi_id'] = pbi_id
+
+            # Create DBIndexRecord for validation
+            record = DBIndexRecord(**index_data)
+            model_dict = record.model_dump()
+
+            # Build INSERT statement
+            fields = []
+            values = []
+            for field, value in model_dict.items():
+                if value is not None:
+                    fields.append(field)
+                    values.append(value)
+
+            if fields:
+                placeholders = ["?"] * len(fields)
+                sql = f"INSERT INTO DB_Indexes ({', '.join(fields)}) VALUES ({', '.join(placeholders)})"
+                conn.execute(sql, values)
+
+        conn.commit()
+    except pyodbc.Error:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def store_db_findings_for_record(pbi_id: int, findings: List[Dict[str, Any]]):
+    """Store DB_Findings for a specific BlitzIndex record"""
+    _ensure_db()
+    conn = _get_conn()
+
+    try:
+        for finding_data in findings:
+            # Add pbi_id to each record
+            finding_data['pbi_id'] = pbi_id
+
+            # Create DBFindingRecord for validation
+            record = DBFindingRecord(**finding_data)
+            model_dict = record.model_dump()
+
+            # Build INSERT statement
+            fields = []
+            values = []
+            for field, value in model_dict.items():
+                if value is not None:
+                    fields.append(field)
+                    values.append(value)
+
+            if fields:
+                placeholders = ["?"] * len(fields)
+                sql = f"INSERT INTO DB_Findings ({', '.join(fields)}) VALUES ({', '.join(placeholders)})"
+                conn.execute(sql, values)
+
+        conn.commit()
+    except pyodbc.Error:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def mark_index_findings_loaded(pbi_id: int):
+    """Mark BlitzIndex record as having index findings loaded"""
+    _ensure_db()
+    conn = _get_conn()
+
+    try:
+        conn.execute("UPDATE Procedure_blitzindex SET index_findings_loaded = 1 WHERE pbi_id = ?", (pbi_id,))
+        conn.commit()
+    except pyodbc.Error:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
