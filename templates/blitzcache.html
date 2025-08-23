@@ -181,7 +181,7 @@
                                 </td>
                                 <td class="warnings">{{ rec.warnings if rec.warnings else '' }}</td>
                                 <td>
-                                    <form method="get" action="{{ url_for('analyze', display_name=proc_name, rec_id=rec._rec_id) }}">
+                                    <form method="get" action="{{ url_for('analyze', display_name=proc_name, procedure_order=rec._rec_id) }}">
                                         <button type="submit">Analyze</button>
                                     </form>
                                 </td>

@@ -6,6 +6,7 @@ import pyodbc
 import sys
 import time
 import logging
+import json
 from httpx import RemoteProtocolError
 
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -15,6 +16,8 @@ from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain_openai import ChatOpenAI
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
+
+from app import procedure
 
 # Import the centralized connection function
 from .db_connection import get_connection
@@ -241,50 +244,6 @@ def execute(procedure: str, record_id: int, user_input: str, chat_history: list)
 
 
 
-
-def _load_prompt_for(procedure: str, finding: str, database: str) -> str:
-    """
-    Load a prompt template for a given procedure and populate placeholders.
-
-    Behavior is driven by the `VERSION` in the `.env` file at project root.
-    VERSION=1 -> use `db/prompts/general_sp_blitz.txt`
-    VERSION=2 -> prefer `db/prompts/{procedure}.txt`, fallback to general
-    """
-    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-    version = int(os.getenv("VERSION", '1'))
-
-    prompts_dir = os.path.join(project_root, "db", "prompts")
-    specific_prompt_file = os.path.join(prompts_dir, f"{procedure}.txt")
-    general_prompt_file = os.path.join(project_root, "prompts", "general_sp_blitz.txt")
-
-    template = None
-    if version == 2:
-        # Try procedure-specific prompt first
-        try:
-            if os.path.exists(specific_prompt_file):
-                with open(specific_prompt_file, "r") as f:
-                    template = f.read()
-            elif os.path.exists(general_prompt_file):
-                with open(general_prompt_file, "r") as f:
-                    template = f.read()
-        except Exception:
-            return None
-    if version == 1:
-        # Version 1: use the generic prompt
-        try:
-            if os.path.exists(general_prompt_file):
-                with open(general_prompt_file, "r") as f:
-                    template = f.read()
-        except Exception:
-            return None
-
-    if not template:
-        return None
-
-    return template.format(procedure=procedure, finding=finding, database=database)
-
-
 def execute_more_info_query(more_info_sql: str) -> List[Dict[str, Any]]:
     """
     Execute the more_info SQL command from BlitzIndex to get detailed index information.
@@ -316,71 +275,86 @@ def execute_more_info_query(more_info_sql: str) -> List[Dict[str, Any]]:
         return []
 
 
-def _load_specialized_prompt(record, db_indexes: List[DBIndexRecord], database: str) -> str:
+def load_specialized_prompt(procedure_name, record, database: str) -> str:
     """
     Load specialized prompt templates based on the finding type and populate with index data.
     Supports over-indexing, redundant indexes, and heap analysis findings.
     """
+
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     version = int(os.getenv("VERSION", '1'))
-    finding = record.finding or ""
+    finding = json.loads(record.raw_record)
 
-    # Determine which type of analysis this is
-    is_over_indexing = finding.startswith("Over-Indexing")
-    is_redundant_indexes = finding.startswith("Redundant Indexes")
-    is_heap_analysis = finding.startswith("Indexes Worth Reviewing")
+    general_prompt_file = os.path.join(project_root, "prompts", "general_sp_blitz.txt")
 
     if version == 1:
-        # Use the generic prompt for version 1
-        prompt_file = os.path.join(project_root, "prompts", "general_sp_blitz.txt")
         try:
-            with open(prompt_file, "r", encoding="utf-8") as f:
+            with open(general_prompt_file, "r", encoding="utf-8") as f:
                 template = f.read()
         except (IOError, OSError) as e:
-            if is_over_indexing:
-                analysis_type = "over-indexing"
-            elif is_redundant_indexes:
-                analysis_type = "redundant indexes"
-            else:
-                analysis_type = "heap table"
-            print(f"Error loading {analysis_type} prompt: {e}")
-            return f"Analyze {analysis_type} issue for {finding} in database {database}"
+            print(f"Error loading prompt file: {e}")
+            return f"Error loading {general_prompt_file} file"
 
-        return template.format(procedure="sp_BlitzIndex", finding=finding, database=database)
+        return template.format(finding=finding)
 
     elif version == 2:
-        # Use specialized prompts for version 2
-        if is_over_indexing:
-            prompt_file = os.path.join(project_root, "db", "prompts", "over_indexing.txt")
-            error_prefix = "over-indexing"
-            format_func = _format_index_data_for_prompt
-        elif is_redundant_indexes:
-            prompt_file = os.path.join(project_root, "db", "prompts", "redundant_indexes.txt")
-            error_prefix = "redundant indexes"
-            format_func = _format_index_data_for_prompt
-        elif is_heap_analysis:
-            prompt_file = os.path.join(project_root, "db", "prompts", "heap_analysis.txt")
-            error_prefix = "heap analysis"
-            format_func = _format_heap_data_for_prompt
-        else:
-            # Fallback to over-indexing prompt for unknown types
-            prompt_file = os.path.join(project_root, "db", "prompts", "over_indexing.txt")
-            error_prefix = "analysis"
-            format_func = _format_index_data_for_prompt
+        if procedure_name == "sp_BlitzIndex" and record.more_info is not None:
+            try:
+                # dao.process_over_indexing_analysis(record)
+                db_indexes = dao.get_db_indexes(record.pbi_id)
 
-        try:
-            with open(prompt_file, "r", encoding="utf-8") as f:
-                template = f.read()
-        except (IOError, OSError) as e:
-            print(f"Error loading {error_prefix} prompt: {e}")
-            return f"Analyze {error_prefix} issue for {finding} in database {database}"
+                # Determine which type of analysis this is
+                record_finding = record.finding
+                is_over_indexing = record_finding.startswith("Over-Indexing")
+                is_redundant_indexes = record_finding.startswith("Redundant Indexes")
+                is_heap_analysis = record_finding.startswith("Indexes Worth Reviewing")
 
-        # Format the index data for the prompt
-        index_analysis_data = format_func(record, db_indexes)
-        return template.format(
-            finding=finding,
-            index_analysis_data=index_analysis_data
-        )
+                # Use specialized prompts for version 2
+                if is_over_indexing:
+                    prompt_file = os.path.join(project_root, "db", "prompts", "over_indexing.txt")
+                    format_func = _format_index_data_for_prompt
+                elif is_redundant_indexes:
+                    prompt_file = os.path.join(project_root, "db", "prompts", "redundant_indexes.txt")
+                    format_func = _format_index_data_for_prompt
+                elif is_heap_analysis:
+                    prompt_file = os.path.join(project_root, "db", "prompts", "heap_analysis.txt")
+                    format_func = _format_heap_data_for_prompt
+                else:
+                    # Fallback to over-indexing prompt for unknown types
+                    prompt_file = os.path.join(project_root, "db", "prompts", "sp_BlitzIndex_analysis.txt")
+                    format_func = _format_index_data_for_prompt
+
+                try:
+                    with open(prompt_file, "r", encoding="utf-8") as f:
+                        template = f.read()
+                except (IOError, OSError) as e:
+                    print(f"Error loading {prompt_file} file: {e}")
+                    return f"Error loading {prompt_file} file"
+
+                # Format the index data for the prompt
+                index_analysis_data = format_func(record, db_indexes)
+                return template.format(
+                    finding=finding,
+                    index_analysis_data=index_analysis_data
+                )
+            except (pyodbc.Error, ValueError, KeyError) as e:
+                print(f"Error processing indexing analysis: {e}")
+
+        if procedure_name == "sp_BlitzIndex" or  procedure_name == "sp_BlitzCache" or procedure_name == "sp_Blitz":
+            specific_prompt_file = os.path.join(project_root, "db", "prompts", f"{procedure}.txt")
+
+            try:
+                if os.path.exists(specific_prompt_file):
+                    with open(specific_prompt_file, "r") as f:
+                        template = f.read()
+                elif os.path.exists(general_prompt_file):
+                    with open(general_prompt_file, "r") as f:
+                        template = f.read()
+            except Exception:
+                return f"Error loading prompt file"
+
+
+            return template.format(finding=finding)
 
     return "Version of the application is incorrectly set. Possible values are 1 or 2"
 
@@ -509,17 +483,6 @@ def _format_heap_data_for_prompt(record, db_indexes: List[DBIndexRecord]) -> str
 
             formatted_data.append("-" * 30)
 
-    # Add summary information for clustering analysis
-    formatted_data.append("\nCLUSTERING ANALYSIS CONSIDERATIONS:")
-    formatted_data.append("-" * 40)
-    formatted_data.append("• Current table is a HEAP (no clustered index)")
-    formatted_data.append("• Primary key is NONCLUSTERED, causing RID lookups")
-    formatted_data.append("• Consider clustering key candidates based on:")
-    formatted_data.append("  - Query patterns and WHERE clause usage")
-    formatted_data.append("  - Uniqueness and selectivity")
-    formatted_data.append("  - Insert patterns (prefer ascending keys)")
-    formatted_data.append("  - Update frequency (avoid frequently updated columns)")
-
     return "\n".join(formatted_data)
 
 
@@ -528,7 +491,7 @@ def _format_heap_data_for_prompt(record, db_indexes: List[DBIndexRecord]) -> str
 if __name__ == "__main__":
     # Quick smoke test
     ONE_BLITZINDEX_ROW = "redundand index found: [schema].[table].[index] (indexid=1)"
-    user_question = _load_prompt_for(
+    user_question = load_specialized_prompt(
         "sp_BlitzIndex",
         ONE_BLITZINDEX_ROW,
         os.getenv("MSSQL_DB") or "<unknown_db>"

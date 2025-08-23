@@ -30,6 +30,10 @@ class BlitzIndexRecord(BaseModel):
     raw_record: Optional[str] = None
     procedure_order: int
     pc_id: int
+    database_name: Optional[str] = None
+    schema_name: Optional[str] = None
+    table_name: Optional[str] = None
+    index_findings_loaded: Optional[bool] = False
     _analyzed: bool = False
 
     @property
@@ -106,6 +110,21 @@ class DBIndexRecord(BaseModel):
         from_attributes = True
 
 
+class DBFindingRecord(BaseModel):
+    df_id: Optional[int] = None
+    pbi_id: int
+    finding: Optional[str] = None
+    url: Optional[str] = None
+    estimated_benefit: Optional[str] = None
+    missing_index_request: Optional[str] = None
+    estimated_impact: Optional[str] = None
+    create_tsql: Optional[str] = None
+    sample_query_plan: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
 class Recommendation(BaseModel):
     id_recom: Optional[int] = None
     description: str
@@ -175,6 +194,10 @@ COLUMN_MAPPING = {
         "Priority": "priority",
         "More Info": "more_info",
         "raw_record": "raw_record",
+        "database_name": "database_name",
+        "schema_name": "schema_name",
+        "table_name": "table_name",
+        "index_findings_loaded": "index_findings_loaded",
     },
     "sp_BlitzCache": {
         "Query Text": "query_text",
