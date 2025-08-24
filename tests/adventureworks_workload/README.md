@@ -8,8 +8,8 @@ A standalone script to run the workload generator. This script connects to a dat
 
 **Usage:**
 ```bash
-python init_adventure_works.py
-python workload_generator_manual_test.py
+python tests/adventureworks_workload/init_adventure_works.py
+python tests/adventureworks_workload/workload_generator_main.py
 ```
 
 **Note:** This script requires a properly configured database connection and should not be run as part of the automated test suite.
