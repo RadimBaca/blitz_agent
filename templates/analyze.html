@@ -3,8 +3,15 @@
 {% block title %}Recommendation Analysis - {{ proc_name }}{% endblock %}
 
 {% block content_header %}
-<p><a href="{{ url_for('procedure', display_name=proc_name) }}">← Back</a></p>
-<h2>Recommendation Chat: {{ proc_name }} - #{{ rec_id }}</h2>
+    <div class="action-row">
+        <a href="{{ url_for('procedure', display_name=proc_name) }}" class="btn btn-back">← Back</a>
+        {% if proc_name == 'Blitz Index' %}
+            <form method="get" action="{{ url_for('index_details', procedure_order=rec_id) }}" class="inline-form">
+                <button type="submit" class="btn btn-analyze">Index Details</button>
+            </form>
+        {% endif %}
+    </div>
+    <h2>Chat: {{ proc_name }} - #{{ rec_id }}</h2>
 {% endblock %}
 
 {% block load_form %}
@@ -48,11 +55,19 @@
                         </a>
                         - {{ rec.description[:100] }}{% if rec.description|length > 100 %}...{% endif %}
                     </li>
+                {# removed duplicate back/analyze buttons from inside the recommendations list #}
                 {% endfor %}
             </ul>
         </div>
     </div>
     {% endif %}
 
-    <p><a href="{{ url_for('procedure', display_name=proc_name) }}">← Back</a></p>
+    <div class="action-row">
+        <a href="{{ url_for('procedure', display_name=proc_name) }}" class="btn btn-back">← Back</a>
+        {% if proc_name == 'Blitz Index' %}
+            <form method="get" action="{{ url_for('index_details', procedure_order=rec_id) }}" class="inline-form">
+                <button type="submit" class="btn btn-analyze">Index Details</button>
+            </form>
+        {% endif %}
+    </div>
 {% endblock %}
