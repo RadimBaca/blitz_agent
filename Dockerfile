@@ -1,9 +1,10 @@
 FROM python:3.11
 
 # Základní nástroje a SQLite upgrade
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential curl wget gnupg lsb-release \
-    libsqlite3-dev gpg software-properties-common
+    libsqlite3-dev gpg ca-certificates apt-transport-https \
+    && rm -rf /var/lib/apt/lists/*
 
 # Odebrání konfliktních ODBC knihoven
 RUN apt-get remove -y libodbc2 libodbccr2 libodbcinst2 unixodbc-common || true
