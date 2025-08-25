@@ -64,11 +64,20 @@
                     </form>
 
                     {% if recommendation.pb_id %}
-                        <a href="{{ url_for('analyze', display_name='Blitz', procedure_order=recommendation.pb_procedure_order) }}" class="btn btn-primary">View Related Blitz Analysis</a>
+                        <!-- <a href="{{ url_for('analyze', display_name='Blitz', procedure_order=recommendation.pb_procedure_order) }}" class="btn btn-primary">Chat</a> -->
+                        <form method="get" action="{{ url_for('analyze', display_name='Blitz', procedure_order=recommendation.pbi_procedure_order) }}" style="display: inline;">
+                            <button type="submit" class="btn btn-analyze">Chat</button>
+                        </form>
                     {% elif recommendation.pbi_id %}
-                        <a href="{{ url_for('analyze', display_name='Blitz Index', procedure_order=recommendation.pbi_procedure_order) }}" class="btn btn-primary">View Related Blitz Index Analysis</a>
+                        <!-- <a href="{{ url_for('analyze', display_name='Blitz Index', procedure_order=recommendation.pbi_procedure_order) }}" class="btn btn-primary">Chat</a> -->
+                        <form method="get" action="{{ url_for('analyze', display_name='Blitz Index', procedure_order=recommendation.pbi_procedure_order) }}" style="display: inline;">
+                            <button type="submit" class="btn btn-analyze">Chat</button>
+                        </form>
                     {% elif recommendation.pbc_id %}
-                        <a href="{{ url_for('analyze', display_name='Blitz Cache', procedure_order=recommendation.pbc_procedure_order) }}" class="btn btn-primary">View Related Blitz Cache Analysis</a>
+                        <!-- <a href="{{ url_for('analyze', display_name='Blitz Cache', procedure_order=recommendation.pbc_procedure_order) }}" class="btn btn-primary">Chat</a> -->
+                        <form method="get" action="{{ url_for('analyze', display_name='Blitz Cache', procedure_order=recommendation.pbi_procedure_order) }}" style="display: inline;">
+                            <button type="submit" class="btn btn-analyze">Chat</button>
+                        </form>
                     {% endif %}
                 </div>
             </div>
