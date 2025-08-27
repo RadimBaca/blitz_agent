@@ -204,6 +204,11 @@ def add_database():
             db_port=db_port
         )
 
+        # Attempt to probe server version and instance memory and attach to the record
+        version, instance_memory_mb = db_conn.probe_db_info(db_host, db_port, db_name, db_user, db_password)
+        new_connection.version = version
+        new_connection.instance_memory_mb = instance_memory_mb
+
         # Insert and set as active
         new_db_id = db_dao.insert_db(new_connection)
         db_conn.set_actual_db_id(new_db_id)

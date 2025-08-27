@@ -35,6 +35,45 @@ def build_connection_string(host: str, port: int, database: str, user: str, pass
         f"Authentication=SqlPassword"
     )
 
+
+def probe_db_info(host: str, port: int, database: str, user: str, password: str):
+    """
+    Connect to the target SQL Server and attempt to read server version and instance memory (MB).
+    Returns a tuple (version: Optional[str], instance_memory_mb: Optional[int]).
+    """
+    conn_str = build_connection_string(host, port, database, user, password)
+    version = None
+    instance_memory_mb = None
+    try:
+        with pyodbc.connect(conn_str, autocommit=True) as conn:
+            cur = conn.cursor()
+            try:
+                cur.execute("SELECT @@VERSION")
+                row = cur.fetchone()
+                if row:
+                    version = str(row[0])
+            except Exception:
+                version = None
+
+            # Try a few ways to get instance memory in MB; permissions may vary
+            try:
+                cur.execute("SELECT total_physical_memory_kb FROM sys.dm_os_sys_memory")
+                row = cur.fetchone()
+                if row and row[0] is not None:
+                    instance_memory_mb = int(row[0]) // 1024
+            except Exception:
+                try:
+                    cur.execute("SELECT TOP 1 cntr_value/1024 FROM sys.dm_os_performance_counters WHERE counter_name = 'Total Server Memory (KB)'")
+                    row = cur.fetchone()
+                    if row and row[0] is not None:
+                        instance_memory_mb = int(row[0])
+                except Exception:
+                    instance_memory_mb = None
+    except Exception:
+        return None, None
+
+    return version, instance_memory_mb
+
 def get_connection():
     """
     Get a database connection using the centralized connection logic.
@@ -81,6 +120,12 @@ def get_connection():
                 db_host=mssql_host,
                 db_port=mssql_port
             )
+
+            # Probe database for server metadata and attach if available
+            ver, mem_mb = probe_db_info(mssql_host, mssql_port, mssql_db, mssql_user, mssql_password)
+            new_db_connection.version = ver
+            new_db_connection.instance_memory_mb = mem_mb
+
 
             # Insert the new connection and get the db_id
             actual_db_id = db_dao.insert_db(new_db_connection)

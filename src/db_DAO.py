@@ -11,18 +11,21 @@ class DatabaseConnection(BaseModel):
     db_password: str = Field(..., min_length=1, max_length=100, description="Database password")
     db_host: str = Field(..., min_length=1, max_length=100, description="Database host")
     db_port: int = Field(..., ge=1, le=65535, description="Database port")
+    # optional server metadata
+    version: Optional[str] = Field(None, description="Database server version")
+    instance_memory_mb: Optional[int] = Field(None, description="Instance memory in MB")
 
 
 def get_db(db_id: int) -> Optional[DatabaseConnection]:
     """
     Get database connection info by db_id.
-    
+
     Args:
         db_id: The database connection ID
-        
+
     Returns:
         DatabaseConnection object if found, None if not found
-        
+
     Raises:
         ValueError: If db_id is not a positive integer
     """
@@ -33,7 +36,7 @@ def get_db(db_id: int) -> Optional[DatabaseConnection]:
     conn = _get_conn()
     try:
         cur = conn.execute(
-            "SELECT db_id, db_name, db_user, db_password, db_host, db_port "
+            "SELECT db_id, db_name, db_user, db_password, db_host, db_port, version, instance_memory_mb "
             "FROM Database_connection WHERE db_id = ?",
             (db_id,)
         )
@@ -47,7 +50,9 @@ def get_db(db_id: int) -> Optional[DatabaseConnection]:
             db_user=row[2],
             db_password=row[3],
             db_host=row[4],
-            db_port=row[5]
+            db_port=row[5],
+            version=row[6],
+            instance_memory_mb=row[7]
         )
     finally:
         conn.close()
@@ -56,13 +61,13 @@ def get_db(db_id: int) -> Optional[DatabaseConnection]:
 def insert_db(db_connection: DatabaseConnection) -> int:
     """
     Insert a new database connection and return the db_id.
-    
+
     Args:
         db_connection: DatabaseConnection object (db_id will be ignored)
-        
+
     Returns:
         The newly created db_id
-        
+
     Raises:
         ValueError: If db_connection validation fails
         sqlite3.IntegrityError: If database constraints are violated
@@ -75,10 +80,10 @@ def insert_db(db_connection: DatabaseConnection) -> int:
     conn = _get_conn()
     try:
         cur = conn.execute(
-            "INSERT INTO Database_connection (db_name, db_user, db_password, db_host, db_port) "
-            "VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO Database_connection (db_name, db_user, db_password, db_host, db_port, version, instance_memory_mb) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
             (db_connection.db_name, db_connection.db_user, db_connection.db_password,
-             db_connection.db_host, db_connection.db_port)
+             db_connection.db_host, db_connection.db_port, db_connection.version, db_connection.instance_memory_mb)
         )
         db_id = cur.lastrowid
         conn.commit()
@@ -90,15 +95,15 @@ def insert_db(db_connection: DatabaseConnection) -> int:
 def exists_db(host: str, port: int, user_name: str) -> int:
     """
     Check whether a database connection with the given combination of host, port and user_name exists.
-    
+
     Args:
         host: Database host
         port: Database port
         user_name: Database username
-        
+
     Returns:
         db_id if a matching connection exists, -1 if not found
-        
+
     Raises:
         ValueError: If any of the parameters are invalid
     """
@@ -114,8 +119,8 @@ def exists_db(host: str, port: int, user_name: str) -> int:
     try:
         cur = conn.execute(
             """
-            SELECT db_id 
-            FROM Database_connection 
+            SELECT db_id
+            FROM Database_connection
             WHERE db_host = ? AND db_port = ? AND db_user = ?
             LIMIT 1
             """,
@@ -130,13 +135,13 @@ def exists_db(host: str, port: int, user_name: str) -> int:
 def delete_db(db_id: int) -> bool:
     """
     Delete a database connection by db_id.
-    
+
     Args:
         db_id: The database connection ID to delete
-        
+
     Returns:
         True if a connection was deleted, False if no connection was found
-        
+
     Raises:
         ValueError: If db_id is not a positive integer
         sqlite3.IntegrityError: If there are foreign key constraints preventing deletion
@@ -157,7 +162,7 @@ def delete_db(db_id: int) -> bool:
 def get_all_db_connections() -> list[DatabaseConnection]:
     """
     Get all database connections.
-    
+
     Returns:
         List of DatabaseConnection objects
     """
@@ -165,7 +170,7 @@ def get_all_db_connections() -> list[DatabaseConnection]:
     conn = _get_conn()
     try:
         cur = conn.execute(
-            "SELECT db_id, db_name, db_user, db_password, db_host, db_port "
+            "SELECT db_id, db_name, db_user, db_password, db_host, db_port, version, instance_memory_mb "
             "FROM Database_connection ORDER BY db_id"
         )
         connections = []
@@ -176,7 +181,9 @@ def get_all_db_connections() -> list[DatabaseConnection]:
                 db_user=row[2],
                 db_password=row[3],
                 db_host=row[4],
-                db_port=row[5]
+                db_port=row[5],
+                version=row[6],
+                instance_memory_mb=row[7]
             ))
         return connections
     finally:
