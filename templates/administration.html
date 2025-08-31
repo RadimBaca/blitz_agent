@@ -18,36 +18,37 @@
                     <div class="form-group">
                         <label for="db_name">Database Name:</label>
                         <input type="text" id="db_name" name="db_name" required
-                               placeholder="Enter database name">
+                               placeholder="Enter database name" value="{{ test_form.db_name if test_form else '' }}">
                     </div>
 
                     <div class="form-group">
                         <label for="db_host">Host:</label>
                         <input type="text" id="db_host" name="db_host" required
-                               placeholder="localhost or IP address">
+                               placeholder="localhost or IP address" value="{{ test_form.db_host if test_form else '' }}">
                     </div>
 
                     <div class="form-group">
                         <label for="db_port">Port:</label>
-                        <input type="number" id="db_port" name="db_port" value="1433"
+                        <input type="number" id="db_port" name="db_port" value="{{ test_form.db_port if test_form else 1433 }}"
                                min="1" max="65535" required>
                     </div>
 
                     <div class="form-group">
                         <label for="db_user">Username:</label>
                         <input type="text" id="db_user" name="db_user" required
-                               placeholder="Database username">
+                               placeholder="Database username" value="{{ test_form.db_user if test_form else '' }}">
                     </div>
 
                     <div class="form-group">
                         <label for="db_password">Password:</label>
                         <input type="password" id="db_password" name="db_password" required
-                               placeholder="Database password">
+                               placeholder="Database password" value="{{ test_form.db_password if test_form else '' }}">
                     </div>
 
                     <div class="form-actions">
                         <button type="submit" class="btn-primary">Add Connection</button>
-                        <a href="/{{ proc_name }}" class="btn-secondary">Cancel</a>
+                        <button type="submit" class="btn-secondary" formaction="/test_database" formmethod="post">Test Connection</button>
+                        <a href="/{{ proc_name }}" class="btn-tertiary">Cancel</a>
                     </div>
                 </form>
             </div>
