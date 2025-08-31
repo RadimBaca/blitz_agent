@@ -3,6 +3,7 @@ import pytest
 import requests
 from pathlib import Path
 from dotenv import load_dotenv
+import sys
 
 # Load environment variables
 load_dotenv()
@@ -12,9 +13,8 @@ from src.db_DAO import DatabaseConnection
 from src.connection_DAO import _get_conn
 import src.db_connection as db_conn
 import src.result_DAO as dao
+from app import app as flask_app
 
-# Import Adventure Works workload modules
-import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), 'adventureworks_workload'))
 try:
     import init_adventure_works as init_aw
@@ -166,19 +166,44 @@ class TestAppIntegration:
         # Step 3: Call init endpoint
         print("Step 3: Calling init endpoint...")
 
-        # First, we need to create a database connection in the state database
-        # Based on Adventure Works environment variables
-        db_connection = DatabaseConnection(
-            db_name=os.getenv('MOCK_MSSQL_DB', 'AdventureWorks2019'),
-            db_user=os.getenv('MOCK_MSSQL_USER', 'k2_zoot'),
-            db_password=os.getenv('MOCK_MSSQL_PASSWORD', 'cLaS8eJoA5'),
-            db_host=os.getenv('MOCK_MSSQL_HOST', 'bayer.cs.vsb.cz'),
-            db_port=int(os.getenv('MOCK_MSSQL_PORT', '50042'))
-        )
+        # First, create a database connection by POSTing to the app's /add_database
+        # endpoint so the application path is exercised end-to-end.
+        db_name = os.getenv('MOCK_MSSQL_DB', 'AdventureWorks2019')
+        db_user = os.getenv('MOCK_MSSQL_USER', 'k2_zoot')
+        db_password = os.getenv('MOCK_MSSQL_PASSWORD', 'cLaS8eJoA5')
+        db_host = os.getenv('MOCK_MSSQL_HOST', 'bayer.cs.vsb.cz')
+        db_port = int(os.getenv('MOCK_MSSQL_PORT', '50042'))
 
-        # Insert database connection and set as active
-        new_db_id = db_dao.insert_db(db_connection)
+        # Use the Flask test client to call the add_database endpoint
+        with flask_app.test_client() as client:
+            resp = client.post(
+                "/add_database",
+                data={
+                    "db_name": db_name,
+                    "db_host": db_host,
+                    "db_port": str(db_port),
+                    "db_user": db_user,
+                    "db_password": db_password,
+                    "current_proc": "Blitz",
+                },
+                follow_redirects=False,
+            )
+
+        # Expect a redirect (302) or OK (200)
+        assert resp.status_code in (200, 302), f"Unexpected response creating DB via /add_database: {resp.status_code}"
+
+        # Verify the connection was created in the state DB and set active.
+        connections = db_dao.get_all_db_connections()
+        matching = [
+            c for c in connections
+            if c.db_name == db_name and c.db_host == db_host and c.db_user == db_user
+        ]
+        assert matching, "New database connection not found after POST /add_database"
+        new_db = matching[-1]
+        new_db_id = new_db.db_id
         assert new_db_id is not None and new_db_id > 0, "Failed to create database connection"
+
+        # Ensure the app active DB is set to the new connection (add_database sets it)
         db_conn.set_actual_db_id(new_db_id)
         db_conn.set_actual_db_id(new_db_id)
 

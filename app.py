@@ -1,6 +1,6 @@
 
 import os
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash, session
 import pyodbc
 import markdown
 from markupsafe import Markup
@@ -204,6 +204,11 @@ def add_database():
             db_port=db_port
         )
 
+        # Attempt to probe server version and instance memory and attach to the record
+        version, instance_memory_mb = db_conn.probe_db_info(db_host, db_port, db_name, db_user, db_password)
+        new_connection.version = version
+        new_connection.instance_memory_mb = instance_memory_mb
+
         # Insert and set as active
         new_db_id = db_dao.insert_db(new_connection)
         db_conn.set_actual_db_id(new_db_id)
@@ -216,6 +221,49 @@ def add_database():
         # Handle errors - in a real app, you'd want better error handling
         print(f"Error adding database: {e}")
         display_name = request.form.get("current_proc", "Blitz")
+        return redirect(url_for('administration'))
+
+
+@app.route("/test_database", methods=["POST"])
+def test_database():
+    """Handle testing a database connection from the administration form and flash the result."""
+    try:
+        db_name = request.form.get("db_name")
+        db_host = request.form.get("db_host")
+        db_port = int(request.form.get("db_port", 1433))
+        db_user = request.form.get("db_user")
+        db_password = request.form.get("db_password")
+
+        # Store submitted values so administration can prefill the form after redirect
+        session['test_form'] = {
+            'db_name': db_name,
+            'db_host': db_host,
+            'db_port': db_port,
+            'db_user': db_user,
+            # Don't store passwords in session in production; kept here for UX convenience in dev
+            'db_password': db_password,
+        }
+
+        if not all([db_name, db_host, db_user, db_password]):
+            flash("All fields are required to test the connection.", "error")
+            return redirect(url_for('administration'))
+
+        version, instance_memory_mb = db_conn.probe_db_info(db_host, db_port, db_name, db_user, db_password)
+
+        if version or instance_memory_mb:
+            parts = []
+            if version:
+                parts.append(f"Version: {version}")
+            if instance_memory_mb is not None:
+                parts.append(f"Instance memory: {instance_memory_mb} MB")
+            flash(f"Connection successful. {'; '.join(parts)}", "success")
+        else:
+            flash("Connection failed. Could not reach the database or insufficient permissions to probe metadata.", "error")
+
+        return redirect(url_for('administration'))
+
+    except (pyodbc.Error, ValueError) as e:
+        flash(f"Connection test failed: {str(e)}", "error")
         return redirect(url_for('administration'))
 
 @app.route("/delete_database", methods=["POST"])
@@ -260,11 +308,14 @@ def administration():
     """Database administration page"""
     # Get fresh list of connections for the administration page
     current_connections = db_dao.get_all_db_connections()
+    # If a test submitted form exists in session, pop it to prefill the form
+    test_form = session.pop('test_form', None)
     return render_template("administration.html",
                            proc_name="Administration",
                            procedures=PROCEDURES,
                            connections=current_connections,
-                           actual_db_id=db_conn.get_actual_db_id())
+                           actual_db_id=db_conn.get_actual_db_id(),
+                           test_form=test_form)
 
 @app.route("/")
 def home():

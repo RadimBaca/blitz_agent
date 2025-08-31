@@ -10,7 +10,10 @@ CREATE TABLE Database_connection (
   db_user VARCHAR(100) NOT NULL,
   db_password VARCHAR(100) NOT NULL,
   db_host VARCHAR(100) NOT NULL,
-  db_port INTEGER NOT NULL
+  db_port INTEGER NOT NULL,
+  -- optional server information
+  version VARCHAR(512) NULL,
+  instance_memory_mb INTEGER NULL
 );
 
 CREATE TABLE Procedure_call (

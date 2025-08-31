@@ -17,7 +17,8 @@ from langchain_openai import ChatOpenAI
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
 
-from app import procedure
+# Avoid importing `procedure` from app to prevent circular import when app imports this module.
+# The code below will use the local `procedure_name` parameter instead where needed.
 
 # Import the centralized connection function
 from .db_connection import get_connection
@@ -341,7 +342,8 @@ def load_specialized_prompt(procedure_name, record, database: str) -> str:
                 print(f"Error processing indexing analysis: {e}")
 
         if procedure_name == "sp_BlitzIndex" or  procedure_name == "sp_BlitzCache" or procedure_name == "sp_Blitz":
-            specific_prompt_file = os.path.join(project_root, "db", "prompts", f"{procedure}.txt")
+            # Use the local parameter `procedure_name` to select the specific prompt file
+            specific_prompt_file = os.path.join(project_root, "db", "prompts", f"{procedure_name}.txt")
 
             try:
                 if os.path.exists(specific_prompt_file):
