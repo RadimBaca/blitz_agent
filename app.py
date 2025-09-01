@@ -7,9 +7,10 @@ from markupsafe import Markup
 from dotenv import load_dotenv
 from datetime import datetime as dt_parser
 
+from sqlalchemy import false
+
 import src.agent_blitz_one_blitzindex as blitz_agent
 import src.result_DAO as dao
-from src.result_DAO import safe_pretty_json
 import src.db_DAO as db_dao
 import src.db_connection as db_conn
 
@@ -548,34 +549,10 @@ def init(display_name):
     try:
         procedure_name = get_procedure_name(display_name)
 
-        # Get database name for procedures that require it
-        db_connection = db_dao.get_db(db_conn.get_actual_db_id())
-        database_name = db_connection.db_name if db_connection else None
+        ok, records = db_conn.exec_blitz(procedure_name)
 
-        with db_conn.get_connection() as db_connection:
-            cursor = db_connection.cursor()
-
-            # Add @DatabaseName parameter for sp_BlitzCache and sp_BlitzIndex
-            if procedure_name == 'sp_BlitzCache' and database_name:
-                cursor.execute(f"EXEC {procedure_name} @DatabaseName = ?", (database_name,))
-            elif procedure_name == 'sp_BlitzIndex' and database_name:
-                cursor.execute(f"EXEC {procedure_name} @IncludeInactiveIndexes=1, @Mode=4, @DatabaseName = ?", (database_name,))
-            else:
-                cursor.execute(f"EXEC {procedure_name}")
-
-            while cursor.description is None:
-                if not cursor.nextset():
-                    return f"<h1>Error</h1><p>No result sets returned from procedure {procedure_name}.</p><p><a href='{url_for('procedure', display_name=display_name)}'>← Back to {display_name}</a></p>", 500
-
-            columns = [desc[0] for desc in cursor.description]
-            rows = cursor.fetchall()
-            records = []
-            for row in rows:
-                full = dict(zip(columns, row))
-                # Apply serialization for storage
-                serialized_full = safe_pretty_json(full)
-                # Store the original SQL Server data for the DAO
-                records.append(serialized_full)
+        if not ok:
+            return f"<h1>Error</h1><p>No result sets returned from procedure {procedure_name}.</p><p><a href='{url_for('procedure', display_name=display_name)}'>← Back to {display_name}</a></p>", 500
 
         dao.store_records(procedure_name, records, db_conn.get_actual_db_id())
         # dao.delete_chat_sessions(get_procedure_name(display_name), actual_db_id)
@@ -583,6 +560,7 @@ def init(display_name):
 
     except (pyodbc.Error, ValueError) as e:
         return get_database_error_message(e, "initialization", display_name)
+
 
 @app.route("/analyze/<display_name>/<int:procedure_order>", methods=["GET", "POST"])
 def analyze(display_name, procedure_order):
