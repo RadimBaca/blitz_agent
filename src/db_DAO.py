@@ -1,6 +1,6 @@
 from typing import Optional
 from pydantic import BaseModel, Field
-from .connection_DAO import _ensure_db, _get_conn
+from .connection_DAO import _ensure_db, _get_conn, get_conn_ctx
 
 
 class DatabaseConnection(BaseModel):
@@ -33,8 +33,7 @@ def get_db(db_id: int) -> Optional[DatabaseConnection]:
         raise ValueError("db_id must be a positive integer")
 
     _ensure_db()
-    conn = _get_conn()
-    try:
+    with get_conn_ctx() as conn:
         cur = conn.execute(
             "SELECT db_id, db_name, db_user, db_password, db_host, db_port, version, instance_memory_mb "
             "FROM Database_connection WHERE db_id = ?",
@@ -54,8 +53,6 @@ def get_db(db_id: int) -> Optional[DatabaseConnection]:
             version=row[6],
             instance_memory_mb=row[7]
         )
-    finally:
-        conn.close()
 
 
 def insert_db(db_connection: DatabaseConnection) -> int:
@@ -77,8 +74,7 @@ def insert_db(db_connection: DatabaseConnection) -> int:
         raise ValueError("db_connection must be a DatabaseConnection instance")
 
     _ensure_db()
-    conn = _get_conn()
-    try:
+    with get_conn_ctx() as conn:
         cur = conn.execute(
             "INSERT INTO Database_connection (db_name, db_user, db_password, db_host, db_port, version, instance_memory_mb) "
             "VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -86,10 +82,7 @@ def insert_db(db_connection: DatabaseConnection) -> int:
              db_connection.db_host, db_connection.db_port, db_connection.version, db_connection.instance_memory_mb)
         )
         db_id = cur.lastrowid
-        conn.commit()
         return db_id
-    finally:
-        conn.close()
 
 
 def exists_db(host: str, port: int, user_name: str) -> int:
@@ -115,8 +108,7 @@ def exists_db(host: str, port: int, user_name: str) -> int:
         raise ValueError("user_name must be a non-empty string")
 
     _ensure_db()
-    conn = _get_conn()
-    try:
+    with get_conn_ctx() as conn:
         cur = conn.execute(
             """
             SELECT db_id
@@ -128,8 +120,6 @@ def exists_db(host: str, port: int, user_name: str) -> int:
         )
         row = cur.fetchone()
         return row[0] if row else -1
-    finally:
-        conn.close()
 
 
 def delete_db(db_id: int) -> bool:
@@ -150,13 +140,9 @@ def delete_db(db_id: int) -> bool:
         raise ValueError("db_id must be a positive integer")
 
     _ensure_db()
-    conn = _get_conn()
-    try:
+    with get_conn_ctx() as conn:
         cur = conn.execute("DELETE FROM Database_connection WHERE db_id = ?", (db_id,))
-        conn.commit()
         return cur.rowcount > 0
-    finally:
-        conn.close()
 
 
 def get_all_db_connections() -> list[DatabaseConnection]:
@@ -167,8 +153,7 @@ def get_all_db_connections() -> list[DatabaseConnection]:
         List of DatabaseConnection objects
     """
     _ensure_db()
-    conn = _get_conn()
-    try:
+    with get_conn_ctx() as conn:
         cur = conn.execute(
             "SELECT db_id, db_name, db_user, db_password, db_host, db_port, version, instance_memory_mb "
             "FROM Database_connection ORDER BY db_id"
@@ -186,5 +171,3 @@ def get_all_db_connections() -> list[DatabaseConnection]:
                 instance_memory_mb=row[7]
             ))
         return connections
-    finally:
-        conn.close()
