@@ -16,66 +16,65 @@ def filter_priority(blitz_records, max_priority):
 
 
 def filter_blitz(blitz_records):
-    all_groups = set()
-    for record in blitz_records:
-        if record.finding:
-            all_groups.add(record.finding)
+    # Wrapper for backward compatibility that returns only filtered records
+    def _extract_full(finding: str):
+        return finding if finding else None
 
-    finding_groups = sorted(list(all_groups))
-
-        # Get selected finding groups from request
-    selected_finding_groups = request.args.getlist('finding_groups')
-
-        # Check if this is an explicit "deselect all" action
-    deselect_all = request.args.get('deselect_all') == 'true'
-
-    if deselect_all:
-            # Explicitly show no results
-        selected_finding_groups = []
-        blitz_records = []
-    elif not selected_finding_groups:
-            # If no groups selected and not explicit deselect, show all groups (default behavior)
-        selected_finding_groups = finding_groups
-    else:
-            # Filter records by selected finding groups
-        blitz_records = [record for record in blitz_records
-                           if record.finding and record.finding in selected_finding_groups]
-
-    return blitz_records
+    filtered, _, _ = _filter_by_finding_groups(blitz_records, _extract_full)
+    return filtered
 
 def filter_blitz_index(blitz_records):
+    # Extract group as prefix before ':'
+    def _extract_prefix(finding: str):
+        if not finding:
+            return None
+        if ':' in finding:
+            return finding.split(':', 1)[0]
+        return None
+
+    return _filter_by_finding_groups(blitz_records, _extract_prefix)
+
+
+def _filter_by_finding_groups(blitz_records, extract_group):
+    """Generic filter helper.
+
+    extract_group: callable that receives the raw finding string and returns the group
+    or None if the record should not contribute a group.
+    Returns (filtered_records, finding_groups, selected_finding_groups).
+    """
     all_groups = set()
     for record in blitz_records:
         if record.finding:
-            if ':' in record.finding:
-                group = record.finding.split(':', 1)[0]
+            group = extract_group(record.finding)
+            if group:
                 all_groups.add(group)
 
     finding_groups = sorted(list(all_groups))
 
-        # Get selected finding groups from request
+    # Get selected finding groups from request
     selected_finding_groups = request.args.getlist('finding_groups')
 
-        # Check if this is an explicit "deselect all" action
+    # Check if this is an explicit "deselect all" action
     deselect_all = request.args.get('deselect_all') == 'true'
 
     if deselect_all:
-            # Explicitly show no results
+        # Explicitly show no results
         selected_finding_groups = []
-        blitz_records = []
+        filtered_records = []
     elif not selected_finding_groups:
-            # If no groups selected and not explicit deselect, show all groups (default behavior)
+        # If no groups selected and not explicit deselect, show all groups (default behavior)
         selected_finding_groups = finding_groups
+        filtered_records = blitz_records
     else:
-            # Filter records by selected finding groups
+        # Filter records by selected finding groups
         filtered_records = []
         for record in blitz_records:
-            if record.finding and ':' in record.finding:
-                group = record.finding.split(':', 1)[0]
-                if group in selected_finding_groups:
+            if record.finding:
+                group = extract_group(record.finding)
+                if group and group in selected_finding_groups:
                     filtered_records.append(record)
-        blitz_records = filtered_records
-    return blitz_records,finding_groups,selected_finding_groups
+
+    return filtered_records, finding_groups, selected_finding_groups
 
 def filter_blitz_cache(blitz_records, min_avg_cpu, min_total_cpu, min_executions, min_total_reads):
 
