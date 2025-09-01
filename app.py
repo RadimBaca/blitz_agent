@@ -13,6 +13,7 @@ import src.agent_blitz_one_blitzindex as blitz_agent
 import src.result_DAO as dao
 import src.db_DAO as db_dao
 import src.db_connection as db_conn
+import src.app_filter_sort as filter_sort
 
 
 connections = db_dao.get_all_db_connections()
@@ -347,82 +348,20 @@ def procedure(display_name):
 
     # Handle priority filtering for Blitz and Blitz Index
     if display_name in ["Blitz", "Blitz Index"]:
-        blitz_records = [record for record in blitz_records
-                    if record.priority is not None and record.priority >= 0]
-
         max_priority = request.args.get('max_priority')
-        if max_priority:
-            try:
-                max_priority_int = int(max_priority)
-                blitz_records = [record for record in blitz_records
-                               if record.priority is not None and record.priority <= max_priority_int]
-            except ValueError:
-                pass  # Invalid priority value, ignore filter
+        blitz_records = filter_sort.filter_priority(blitz_records, max_priority)
 
     # Handle finding group filtering for Blitz and Blitz Index
     finding_groups = []
     selected_finding_groups = []
 
     if display_name == "Blitz":
-        # Extract all unique findings from records with valid priority (>= 0) for filter display
-        all_groups = set()
-        for record in blitz_records:
-            if record.finding:
-                all_groups.add(record.finding)
-
-        finding_groups = sorted(list(all_groups))
-
-        # Get selected finding groups from request
-        selected_finding_groups = request.args.getlist('finding_groups')
-
-        # Check if this is an explicit "deselect all" action
-        deselect_all = request.args.get('deselect_all') == 'true'
-
-        if deselect_all:
-            # Explicitly show no results
-            selected_finding_groups = []
-            blitz_records = []
-        elif not selected_finding_groups:
-            # If no groups selected and not explicit deselect, show all groups (default behavior)
-            selected_finding_groups = finding_groups
-        else:
-            # Filter records by selected finding groups
-            blitz_records = [record for record in blitz_records
-                           if record.finding and record.finding in selected_finding_groups]
+        # Extract all unique findings from records
+        blitz_records = filter_sort.filter_blitz(blitz_records)
 
     elif display_name == "Blitz Index":
-        # Extract all unique finding groups from records with valid priority (>= 0) for filter display
-        all_groups = set()
-        for record in blitz_records:
-            if record.finding:
-                if ':' in record.finding:
-                    group = record.finding.split(':', 1)[0]
-                    all_groups.add(group)
-
-        finding_groups = sorted(list(all_groups))
-
-        # Get selected finding groups from request
-        selected_finding_groups = request.args.getlist('finding_groups')
-
-        # Check if this is an explicit "deselect all" action
-        deselect_all = request.args.get('deselect_all') == 'true'
-
-        if deselect_all:
-            # Explicitly show no results
-            selected_finding_groups = []
-            blitz_records = []
-        elif not selected_finding_groups:
-            # If no groups selected and not explicit deselect, show all groups (default behavior)
-            selected_finding_groups = finding_groups
-        else:
-            # Filter records by selected finding groups
-            filtered_records = []
-            for record in blitz_records:
-                if record.finding and ':' in record.finding:
-                    group = record.finding.split(':', 1)[0]
-                    if group in selected_finding_groups:
-                        filtered_records.append(record)
-            blitz_records = filtered_records
+        # Extract all unique finding groups from records
+        blitz_records, finding_groups, selected_finding_groups = filter_sort.filter_blitz_index(blitz_records)
 
     # Handle BlitzCache filtering
     if display_name == "Blitz Cache":
@@ -431,99 +370,16 @@ def procedure(display_name):
         min_total_cpu = request.args.get('min_total_cpu')
         min_executions = request.args.get('min_executions')
         min_total_reads = request.args.get('min_total_reads')
-
-        # Apply filters if they are provided and valid
-        if min_avg_cpu:
-            try:
-                min_avg_cpu_float = float(min_avg_cpu)
-                blitz_records = [record for record in blitz_records
-                               if record.avg_cpu_ms is not None and record.avg_cpu_ms >= min_avg_cpu_float]
-            except ValueError:
-                pass  # Invalid value, ignore filter
-
-        if min_total_cpu:
-            try:
-                min_total_cpu_float = float(min_total_cpu)
-                blitz_records = [record for record in blitz_records
-                               if record.total_cpu_ms is not None and record.total_cpu_ms >= min_total_cpu_float]
-            except ValueError:
-                pass  # Invalid value, ignore filter
-
-        if min_executions:
-            try:
-                min_executions_int = int(min_executions)
-                blitz_records = [record for record in blitz_records
-                               if record.executions is not None and record.executions >= min_executions_int]
-            except ValueError:
-                pass  # Invalid value, ignore filter
-
-        if min_total_reads:
-            try:
-                min_total_reads_int = int(min_total_reads)
-                blitz_records = [record for record in blitz_records
-                               if record.total_reads is not None and record.total_reads >= min_total_reads_int]
-            except ValueError:
-                pass  # Invalid value, ignore filter
+        blitz_records = filter_sort.filter_blitz_cache(blitz_records, min_avg_cpu, min_total_cpu, min_executions, min_total_reads)
 
         # Handle time window filtering
         start_hour = request.args.get('start_hour')
         end_hour = request.args.get('end_hour')
-
-        if start_hour and end_hour:
-            try:
-                start_hour_int = int(start_hour)
-                end_hour_int = int(end_hour)
-
-                # Filter records based on hour of last_execution
-                filtered_records = []
-                for record in blitz_records:
-                    if record.last_execution:
-                        # Extract hour from last_execution datetime
-                        try:
-                            if hasattr(record.last_execution, 'hour'):
-                                # It's a datetime object
-                                execution_hour = record.last_execution.hour
-                            else:
-                                # It's a string, try to parse it
-                                execution_hour = None
-                                for fmt in ['%Y-%m-%dT%H:%M:%S.%f', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M:%S.%f', '%m/%d/%Y %H:%M:%S']:
-                                    try:
-                                        dt = dt_parser.strptime(str(record.last_execution), fmt)
-                                        execution_hour = dt.hour
-                                        break
-                                    except ValueError:
-                                        continue
-
-                                if execution_hour is None:
-                                    continue
-
-                            # Check if execution hour is within the selected range
-                            if start_hour_int <= end_hour_int:
-                                # Normal range (e.g., 9-17)
-                                if start_hour_int <= execution_hour <= end_hour_int:
-                                    filtered_records.append(record)
-                            else:
-                                # Range crosses midnight (e.g., 22-6)
-                                if execution_hour >= start_hour_int or execution_hour <= end_hour_int:
-                                    filtered_records.append(record)
-                        except (AttributeError, ValueError):
-                            continue
-
-                blitz_records = filtered_records
-            except ValueError:
-                pass  # Invalid hour values, ignore filter
+        blitz_records = filter_sort.filter_by_hour(start_hour, end_hour, blitz_records)
 
         sort_by = request.args.get('sort_by')
-        sort_order = request.args.get('sort_order', 'desc')  # Default to descending
-
-        if sort_by in ['avg_cpu_ms', 'total_cpu_ms', 'executions', 'total_reads']:
-            reverse = sort_order == 'desc'
-            # Sort records, handling None values by placing them at the end
-            blitz_records = sorted(blitz_records,
-                                 key=lambda x: getattr(x, sort_by) or 0,
-                                 reverse=reverse)
-
-
+        sort_order = request.args.get('sort_order', 'desc')  # Default sort order is descending
+        blitz_records = filter_sort.sort_records(blitz_records, sort_by, sort_order)
 
     return render_template(template_name,
                            proc_name=display_name,
@@ -543,6 +399,8 @@ def procedure(display_name):
                            current_min_total_reads=request.args.get('min_total_reads'),
                            current_start_hour=request.args.get('start_hour'),
                            current_end_hour=request.args.get('end_hour'))
+
+
 
 @app.route("/init/<display_name>", methods=["POST"])
 def init(display_name):
