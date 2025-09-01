@@ -90,7 +90,7 @@ def load_indexes_findings(record):
 
 
 def perform_initial_analysis(procedure_name, record, procedure_order):
-    """Perform the initial automated analysis for a record and store chat history.
+    """Perform the initial automated analysis for a record using an agent and store chat history.
 
     Returns the created chat_history list.
     """
