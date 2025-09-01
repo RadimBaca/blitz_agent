@@ -1,5 +1,7 @@
 import os
 import sqlite3
+import contextlib as lcontext
+from typing import Iterator
 
 DB_DIR = "db"
 DB_PATH = os.path.join(DB_DIR, "results.db")
@@ -26,3 +28,31 @@ def _ensure_db():
 def _get_conn():
     """Get a database connection"""
     return sqlite3.connect(DB_PATH)
+
+
+@lcontext.contextmanager
+def get_conn_ctx() -> Iterator[sqlite3.Connection]:
+    """Context manager that yields a DB connection and commits on success.
+
+    Usage:
+        with get_conn_ctx() as conn:
+            conn.execute(...)
+
+    The manager will commit when the with-block exits without exception,
+    rollback on exceptions, and always close the connection.
+    """
+    _ensure_db()
+    conn = _get_conn()
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        with lcontext.suppress(Exception):
+            conn.rollback()
+        raise
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            # Best-effort close; avoid raising from close()
+            pass
