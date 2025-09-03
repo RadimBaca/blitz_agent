@@ -3,6 +3,7 @@ import tempfile
 import shutil
 import pytest
 import src.result_DAO as dao
+import src.models as models
 
 @pytest.fixture(autouse=True)
 def temp_cwd(monkeypatch):
@@ -653,8 +654,9 @@ def test_db_indexes_crud():
             'drop_tsql': None
         }
     ]
+    index_records = [models.DBIndexRecord(**index) for index in test_indexes]
 
-    dao.store_db_indexes_for_record(pbi_id, test_indexes)
+    dao.store_db_indexes_for_record(pbi_id, index_records)
 
     # Test retrieving DB indexes
     retrieved_indexes = dao.get_db_indexes_for_record(pbi_id)
@@ -710,7 +712,8 @@ def test_db_findings_crud():
         }
     ]
 
-    dao.store_db_findings_for_record(pbi_id, test_findings)
+    finding_records = [models.DBFindingRecord(**finding) for finding in test_findings]
+    dao.store_db_findings_for_record(pbi_id, finding_records)
 
     # Test retrieving DB findings
     retrieved_findings = dao.get_db_findings_for_record(pbi_id)
@@ -814,8 +817,11 @@ def test_clear_index_findings_for_record():
         'estimated_benefit': 'Low'
     }]
 
-    dao.store_db_indexes_for_record(pbi_id, test_indexes)
-    dao.store_db_findings_for_record(pbi_id, test_findings)
+    finding_records = [models.DBFindingRecord(**finding) for finding in test_findings]
+
+    test_index = [models.DBIndexRecord(**index) for index in test_indexes]
+    dao.store_db_indexes_for_record(pbi_id, test_index)
+    dao.store_db_findings_for_record(pbi_id, finding_records)
     dao.mark_index_findings_loaded(pbi_id)
 
     # Verify data exists
