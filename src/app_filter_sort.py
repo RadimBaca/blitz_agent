@@ -168,3 +168,7 @@ def filter_by_hour(start_hour, end_hour, blitz_records):
             return filtered_records
         except ValueError:
             return blitz_records
+
+    # If start_hour or end_hour not provided, or any non-fatal path falls through,
+    # return the original list so callers don't receive None.
+    return blitz_records
