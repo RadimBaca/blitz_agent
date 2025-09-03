@@ -81,7 +81,7 @@ class ChatRecord(BaseModel):
 
 class DBIndexRecord(BaseModel):
     di_id: Optional[int] = None
-    pbi_id: int
+    pbi_id: Optional[int] = None
     db_schema_object_indexid: Optional[str] = None
     index_definition: Optional[str] = None
     secret_columns: Optional[str] = None
@@ -112,7 +112,7 @@ class DBIndexRecord(BaseModel):
 
 class DBFindingRecord(BaseModel):
     df_id: Optional[int] = None
-    pbi_id: int
+    pbi_id: Optional[int] = None
     finding: Optional[str] = None
     url: Optional[str] = None
     estimated_benefit: Optional[str] = None

@@ -2,6 +2,7 @@ import pytest
 from unittest.mock import patch
 from src.models import BlitzIndexRecord, DBIndexRecord
 import src.result_DAO as dao
+import src.models as models
 
 
 class TestOverIndexingAnalysis:
@@ -79,8 +80,9 @@ class TestOverIndexingAnalysis:
 
     def test_store_and_get_db_indexes(self, sample_db_indexes):
         """Test storing and retrieving DB index records"""
-        # Store indexes (as dict list, not DBIndexRecord objects)
-        dao.store_db_indexes_for_record(1, sample_db_indexes)
+        # Store indexes (as list of DBIndexRecord objects)
+        index_records = [models.DBIndexRecord(**index) for index in sample_db_indexes]
+        dao.store_db_indexes_for_record(1, index_records)
 
         # Retrieve indexes
         retrieved_indexes = dao.get_db_indexes(1)
@@ -96,7 +98,8 @@ class TestOverIndexingAnalysis:
         """Test that storing indexes replaces existing ones for the same pbi_id"""
 
         # Store initial indexes
-        dao.store_db_indexes_for_record(1, sample_db_indexes)
+        index_records = [models.DBIndexRecord(**index) for index in sample_db_indexes]
+        dao.store_db_indexes_for_record(1, index_records)
 
         # Store new indexes for the same pbi_id
         new_index_data = [{
@@ -104,6 +107,7 @@ class TestOverIndexingAnalysis:
             'index_definition': '[NewColumn] ASC',
             'fill_factor': 100
         }]
+        new_index_data = [models.DBIndexRecord(**index) for index in new_index_data]
         dao.store_db_indexes_for_record(1, new_index_data)
 
         # Retrieve indexes

@@ -386,10 +386,10 @@ def process_more_info(record: BlitzIndexRecord) -> Tuple[List[DBIndexRecord], Li
                 len(index_records), len(finding_records), getattr(record, 'pbi_id', None))
     # Store the data
     if index_records:
-        store_db_indexes_for_record(record.pbi_id, [r.model_dump() for r in index_records])
+        store_db_indexes_for_record(record.pbi_id, index_records)
 
     if finding_records:
-        store_db_findings_for_record(record.pbi_id, [r.model_dump() for r in finding_records])
+        store_db_findings_for_record(record.pbi_id, finding_records)
 
     # Mark as loaded
     mark_index_findings_loaded(record.pbi_id)
@@ -817,24 +817,20 @@ def clear_index_findings_for_record(pbi_id: int):
             raise
 
 
-def store_db_indexes_for_record(pbi_id: int, indexes: List[Dict[str, Any]]):
+
+def store_db_indexes_for_record(pbi_id: int, indexes: List[DBIndexRecord]):
     """Store DB_Indexes for a specific BlitzIndex record"""
     with get_conn_ctx() as conn:
         # First, delete existing indexes for this pbi_id
         conn.execute("DELETE FROM DB_Indexes WHERE pbi_id = ?", (pbi_id,))
 
         for index_data in indexes:
-            # Add pbi_id to each record
-            index_data['pbi_id'] = pbi_id
-
-            # Create DBIndexRecord for validation
-            record = DBIndexRecord(**index_data)
-            model_dict = record.model_dump()
+            index_data.pbi_id = pbi_id
 
             # Build INSERT statement
             fields = []
             values = []
-            for field, value in model_dict.items():
+            for field, value in index_data.model_dump().items():
                 if value is not None:
                     fields.append(field)
                     values.append(value)
@@ -847,24 +843,19 @@ def store_db_indexes_for_record(pbi_id: int, indexes: List[Dict[str, Any]]):
 
 
 
-def store_db_findings_for_record(pbi_id: int, findings: List[Dict[str, Any]]):
+def store_db_findings_for_record(pbi_id: int, findings: List[DBFindingRecord]):
     """Store DB_Findings for a specific BlitzIndex record"""
     with get_conn_ctx() as conn:
         # Delete existing findings once
         conn.execute("DELETE FROM DB_Findings WHERE pbi_id = ?", (pbi_id,))
 
         for finding_data in findings:
-            # Add pbi_id to each record
-            finding_data['pbi_id'] = pbi_id
-
-            # Create DBFindingRecord for validation
-            record = DBFindingRecord(**finding_data)
-            model_dict = record.model_dump()
+            finding_data.pbi_id = pbi_id
 
             # Build INSERT statement
             fields = []
             values = []
-            for field, value in model_dict.items():
+            for field, value in finding_data.model_dump().items():
                 if value is not None:
                     fields.append(field)
                     values.append(value)
