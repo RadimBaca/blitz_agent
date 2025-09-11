@@ -168,11 +168,11 @@ class TestAppIntegration:
 
         # First, create a database connection by POSTing to the app's /add_database
         # endpoint so the application path is exercised end-to-end.
-        db_name = os.getenv('MOCK_MSSQL_DB', 'AdventureWorks2019')
-        db_user = os.getenv('MOCK_MSSQL_USER', 'k2_zoot')
+        db_name = os.getenv('MOCK_MSSQL_DB', 'AdventureWorks2022')
+        db_user = os.getenv('MOCK_MSSQL_USER', 'aw_user')
         db_password = os.getenv('MOCK_MSSQL_PASSWORD', 'cLaS8eJoA5')
-        db_host = os.getenv('MOCK_MSSQL_HOST', 'bayer.cs.vsb.cz')
-        db_port = int(os.getenv('MOCK_MSSQL_PORT', '50042'))
+        db_host = os.getenv('MOCK_MSSQL_HOST', 'localhost')
+        db_port = int(os.getenv('MOCK_MSSQL_PORT', '1433'))
 
         # Use the Flask test client to call the add_database endpoint
         with flask_app.test_client() as client:
