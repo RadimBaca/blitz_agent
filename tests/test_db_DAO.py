@@ -78,7 +78,7 @@ class TestDatabaseConnection:
             db_port=5432
         )
         assert db_conn.db_name == "test_db"
-        assert db_conn.db_user == "user" 
+        assert db_conn.db_user == "user"
         assert db_conn.db_password == "pass"
         assert db_conn.db_host == "localhost"
         assert db_conn.db_port == 5432

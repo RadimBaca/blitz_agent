@@ -81,14 +81,14 @@ def probe_db_info(host: str, port: int, database: str, user: str, password: str)
 def check_blitz_procedures(host: str, port: int, database: str, user: str, password: str) -> bool:
     """
     Check if Blitz procedures (sp_Blitz, sp_BlitzIndex, sp_BlitzCache) exist in the database.
-    
+
     Args:
         host: Database server host
         port: Database server port
         database: Database name
         user: Database username
         password: Database password
-    
+
     Returns:
         True if at least one Blitz procedure exists, False otherwise, None if connection fails
     """
