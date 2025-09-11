@@ -13,7 +13,8 @@ CREATE TABLE Database_connection (
   db_port INTEGER NOT NULL,
   -- optional server information
   version VARCHAR(512) NULL,
-  instance_memory_mb INTEGER NULL
+  instance_memory_mb INTEGER NULL,
+  has_blitz_procedures BOOLEAN NULL
 );
 
 CREATE TABLE Procedure_call (

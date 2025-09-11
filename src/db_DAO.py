@@ -14,6 +14,7 @@ class DatabaseConnection(BaseModel):
     # optional server metadata
     version: Optional[str] = Field(None, description="Database server version")
     instance_memory_mb: Optional[int] = Field(None, description="Instance memory in MB")
+    has_blitz_procedures: Optional[bool] = Field(None, description="Whether Blitz procedures exist in the DB")
 
 
 def get_db(db_id: int) -> Optional[DatabaseConnection]:
@@ -35,7 +36,7 @@ def get_db(db_id: int) -> Optional[DatabaseConnection]:
     _ensure_db()
     with get_conn_ctx() as conn:
         cur = conn.execute(
-            "SELECT db_id, db_name, db_user, db_password, db_host, db_port, version, instance_memory_mb "
+            "SELECT db_id, db_name, db_user, db_password, db_host, db_port, version, instance_memory_mb, has_blitz_procedures "
             "FROM Database_connection WHERE db_id = ?",
             (db_id,)
         )
@@ -51,7 +52,8 @@ def get_db(db_id: int) -> Optional[DatabaseConnection]:
             db_host=row[4],
             db_port=row[5],
             version=row[6],
-            instance_memory_mb=row[7]
+            instance_memory_mb=row[7],
+            has_blitz_procedures=bool(row[8]) if row[8] is not None else None
         )
 
 
@@ -76,10 +78,11 @@ def insert_db(db_connection: DatabaseConnection) -> int:
     _ensure_db()
     with get_conn_ctx() as conn:
         cur = conn.execute(
-            "INSERT INTO Database_connection (db_name, db_user, db_password, db_host, db_port, version, instance_memory_mb) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO Database_connection (db_name, db_user, db_password, db_host, db_port, version, instance_memory_mb, has_blitz_procedures) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (db_connection.db_name, db_connection.db_user, db_connection.db_password,
-             db_connection.db_host, db_connection.db_port, db_connection.version, db_connection.instance_memory_mb)
+             db_connection.db_host, db_connection.db_port, db_connection.version, db_connection.instance_memory_mb,
+             int(db_connection.has_blitz_procedures) if db_connection.has_blitz_procedures is not None else None)
         )
         db_id = cur.lastrowid
         return db_id
@@ -155,7 +158,7 @@ def get_all_db_connections() -> list[DatabaseConnection]:
     _ensure_db()
     with get_conn_ctx() as conn:
         cur = conn.execute(
-            "SELECT db_id, db_name, db_user, db_password, db_host, db_port, version, instance_memory_mb "
+            "SELECT db_id, db_name, db_user, db_password, db_host, db_port, version, instance_memory_mb, has_blitz_procedures "
             "FROM Database_connection ORDER BY db_id"
         )
         connections = []
@@ -168,6 +171,7 @@ def get_all_db_connections() -> list[DatabaseConnection]:
                 db_host=row[4],
                 db_port=row[5],
                 version=row[6],
-                instance_memory_mb=row[7]
+                instance_memory_mb=row[7],
+                has_blitz_procedures=bool(row[8]) if row[8] is not None else None
             ))
         return connections

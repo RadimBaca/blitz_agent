@@ -78,6 +78,30 @@ def probe_db_info(host: str, port: int, database: str, user: str, password: str)
 
     return version, instance_memory_mb
 
+def check_blitz_procedures(host: str, port: int, database: str, user: str, password: str) -> bool:
+    """
+    Check if Blitz procedures (sp_Blitz, sp_BlitzIndex, sp_BlitzCache) exist in the database.
+    
+    Args:
+        host: Database server host
+        port: Database server port
+        database: Database name
+        user: Database username
+        password: Database password
+    
+    Returns:
+        True if at least one Blitz procedure exists, False otherwise, None if connection fails
+    """
+    try:
+        conn_str = build_connection_string(host, port, database, user, password)
+        with pyodbc.connect(conn_str, autocommit=True) as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT COUNT(*) FROM sys.objects WHERE type = 'P' AND name IN ('sp_Blitz', 'sp_BlitzIndex', 'sp_BlitzCache')")
+            row = cur.fetchone()
+            return row and row[0] > 0
+    except Exception:
+        return None
+
 def get_connection():
     """
     Get a database connection using the centralized connection logic.
@@ -117,12 +141,22 @@ def get_connection():
                 raise ValueError("Failed to retrieve database connection even though the ID exists.")
         else:
             # Step 3: Database connection doesn't exist, create it
+            temp_conn_str = build_connection_string(
+                mssql_host,
+                mssql_port,
+                mssql_db,
+                mssql_user,
+                mssql_password
+            )
+            blitz_exists = check_blitz_procedures(mssql_host, mssql_port, mssql_db, mssql_user, mssql_password)
+
             new_db_connection = db_dao.DatabaseConnection(
                 db_name=mssql_db,
                 db_user=mssql_user,
                 db_password=mssql_password,
                 db_host=mssql_host,
-                db_port=mssql_port
+                db_port=mssql_port,
+                has_blitz_procedures=blitz_exists
             )
 
             # Probe database for server metadata and attach if available
@@ -130,18 +164,11 @@ def get_connection():
             new_db_connection.version = ver
             new_db_connection.instance_memory_mb = mem_mb
 
-
             # Insert the new connection and get the db_id
             actual_db_id = db_dao.insert_db(new_db_connection)
 
             # Use environment variables for connection
-            conn_str = build_connection_string(
-                mssql_host,
-                mssql_port,
-                mssql_db,
-                mssql_user,
-                mssql_password
-            )
+            conn_str = temp_conn_str
 
         return pyodbc.connect(conn_str)
 

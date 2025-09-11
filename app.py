@@ -252,12 +252,20 @@ def test_database():
 
         version, instance_memory_mb = db_conn.probe_db_info(db_host, db_port, db_name, db_user, db_password)
 
-        if version or instance_memory_mb:
+        # Check for Blitz procedures existence
+        has_blitz = db_conn.check_blitz_procedures(db_host, db_port, db_name, db_user, db_password)
+
+        if version or instance_memory_mb or has_blitz is not None:
             parts = []
             if version:
                 parts.append(f"Version: {version}")
             if instance_memory_mb is not None:
                 parts.append(f"Instance memory: {instance_memory_mb} MB")
+            if has_blitz is not None:
+                if has_blitz:
+                    parts.append("Blitz procedures: Available")
+                else:
+                    parts.append("Blitz procedures: Not found")
             flash(f"Connection successful. {'; '.join(parts)}", "success")
         else:
             flash("Connection failed. Could not reach the database or insufficient permissions to probe metadata.", "error")

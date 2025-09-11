@@ -65,6 +65,7 @@
                                 <th>Username</th>
                                 <th>Version</th>
                                 <th>Instance Memory (MB)</th>
+                                <th>Blitz Procedures</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -77,6 +78,17 @@
                                     <td>{{ conn.db_user }}</td>
                                     <td>{{ conn.version or '-' }}</td>
                                     <td>{{ conn.instance_memory_mb if conn.instance_memory_mb is not none else '-' }}</td>
+                                    <td>
+                                        {% if conn.has_blitz_procedures is not none %}
+                                            {% if conn.has_blitz_procedures %}
+                                                <span style="color: green; font-weight: bold;">Yes</span>
+                                            {% else %}
+                                                <span style="color: red; font-weight: bold;">No</span>
+                                            {% endif %}
+                                        {% else %}
+                                            <span style="color: gray;">Unknown</span>
+                                        {% endif %}
+                                    </td>
                                     <td>
                                         <button type="button" class="btn-copy" onclick="copyConnection('{{ conn.db_name }}', '{{ conn.db_host }}', '{{ conn.db_port }}', '{{ conn.db_user }}', '{{ conn.db_password }}')" title="Copy connection details to form">
                                             Copy
