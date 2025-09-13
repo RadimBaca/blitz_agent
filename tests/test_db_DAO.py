@@ -29,7 +29,8 @@ def sample_db_connection():
         db_user="test_user",
         db_password="test_password",
         db_host="localhost",
-        db_port=5432
+        db_port=5432,
+        has_blitz_procedures=True
     )
 
 
@@ -41,7 +42,8 @@ def another_db_connection():
         db_user="another_user",
         db_password="another_password",
         db_host="remote.example.com",
-        db_port=3306
+        db_port=3306,
+        has_blitz_procedures=False
     )
 
 
@@ -55,6 +57,24 @@ class TestDatabaseConnection:
             db_user="user",
             db_password="pass",
             db_host="localhost",
+            db_port=5432,
+            has_blitz_procedures=True
+        )
+        assert db_conn.db_name == "test_db"
+        assert db_conn.db_user == "user"
+        assert db_conn.db_password == "pass"
+        assert db_conn.db_host == "localhost"
+        assert db_conn.db_port == 5432
+        assert db_conn.db_id is None
+        assert db_conn.has_blitz_procedures is True
+
+    def test_valid_database_connection_without_blitz_procedures(self):
+        """Test creating a valid DatabaseConnection without has_blitz_procedures"""
+        db_conn = DatabaseConnection(
+            db_name="test_db",
+            db_user="user",
+            db_password="pass",
+            db_host="localhost",
             db_port=5432
         )
         assert db_conn.db_name == "test_db"
@@ -63,6 +83,7 @@ class TestDatabaseConnection:
         assert db_conn.db_host == "localhost"
         assert db_conn.db_port == 5432
         assert db_conn.db_id is None
+        assert db_conn.has_blitz_procedures is None
 
     def test_invalid_port_too_high(self):
         """Test that port validation fails for values > 65535"""
@@ -72,7 +93,8 @@ class TestDatabaseConnection:
                 db_user="user",
                 db_password="pass",
                 db_host="localhost",
-                db_port=70000
+                db_port=70000,
+                has_blitz_procedures=True
             )
 
     def test_invalid_port_zero(self):
@@ -83,7 +105,8 @@ class TestDatabaseConnection:
                 db_user="user",
                 db_password="pass",
                 db_host="localhost",
-                db_port=0
+                db_port=0,
+                has_blitz_procedures=False
             )
 
     def test_empty_string_fields(self):
@@ -94,7 +117,8 @@ class TestDatabaseConnection:
                 db_user="user",
                 db_password="pass",
                 db_host="localhost",
-                db_port=5432
+                db_port=5432,
+                has_blitz_procedures=None
             )
 
 
@@ -134,6 +158,7 @@ class TestGetDb:
         assert retrieved.db_password == sample_db_connection.db_password
         assert retrieved.db_host == sample_db_connection.db_host
         assert retrieved.db_port == sample_db_connection.db_port
+        assert retrieved.has_blitz_procedures == sample_db_connection.has_blitz_procedures
 
     def test_get_db_not_found(self):
         """Test get_db with non-existent ID"""
@@ -154,6 +179,47 @@ class TestGetDb:
         """Test get_db with invalid ID (string)"""
         with pytest.raises(ValueError):
             db_dao.get_db("invalid")
+
+    def test_get_db_with_blitz_procedures_variations(self):
+        """Test get_db with different has_blitz_procedures values"""
+        # Test with True
+        conn_true = DatabaseConnection(
+            db_name="test_true",
+            db_user="user",
+            db_password="pass",
+            db_host="localhost",
+            db_port=5432,
+            has_blitz_procedures=True
+        )
+        db_id_true = db_dao.insert_db(conn_true)
+        retrieved_true = db_dao.get_db(db_id_true)
+        assert retrieved_true.has_blitz_procedures is True
+
+        # Test with False
+        conn_false = DatabaseConnection(
+            db_name="test_false",
+            db_user="user",
+            db_password="pass",
+            db_host="localhost",
+            db_port=5433,
+            has_blitz_procedures=False
+        )
+        db_id_false = db_dao.insert_db(conn_false)
+        retrieved_false = db_dao.get_db(db_id_false)
+        assert retrieved_false.has_blitz_procedures is False
+
+        # Test with None
+        conn_none = DatabaseConnection(
+            db_name="test_none",
+            db_user="user",
+            db_password="pass",
+            db_host="localhost",
+            db_port=5434,
+            has_blitz_procedures=None
+        )
+        db_id_none = db_dao.insert_db(conn_none)
+        retrieved_none = db_dao.get_db(db_id_none)
+        assert retrieved_none.has_blitz_procedures is None
 
 
 class TestExistsDb:

@@ -1,8 +1,11 @@
 import os
+from typing import Optional
 import pyodbc
 from dotenv import load_dotenv
 import datetime
 import sqlparse
+import requests
+import re
 
 import src.db_DAO as db_dao
 import src.models as models
@@ -78,6 +81,102 @@ def probe_db_info(host: str, port: int, database: str, user: str, password: str)
 
     return version, instance_memory_mb
 
+def check_blitz_procedures(host: str, port: int, database: str, user: str, password: str) -> bool:
+    """
+    Check if Blitz procedures (sp_Blitz, sp_BlitzIndex, sp_BlitzCache) exist in the database.
+
+    Args:
+        host: Database server host
+        port: Database server port
+        database: Database name
+        user: Database username
+        password: Database password
+
+    Returns:
+        True if at least one Blitz procedure exists, False otherwise, None if connection fails
+    """
+    try:
+        conn_str = build_connection_string(host, port, database, user, password)
+        with pyodbc.connect(conn_str, autocommit=True) as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT COUNT(*) FROM sys.objects WHERE type = 'P' AND name IN ('sp_Blitz', 'sp_BlitzIndex', 'sp_BlitzCache')")
+            row = cur.fetchone()
+            return row and row[0] > 0
+    except Exception:
+        return None
+
+def install_blitz_procedures(host: str, port: int, database: str, user: str, password: str) -> tuple[bool, str]:
+    """
+    Download and install Blitz procedures from the First Responder Kit.
+
+    Args:
+        host: Database server host
+        port: Database server port
+        database: Database name
+        user: Database username
+        password: Database password
+
+    Returns:
+        Tuple of (success: bool, message: str)
+    """
+    try:
+        # Download the installation script
+        url = "https://raw.githubusercontent.com/BrentOzarULTD/SQL-Server-First-Responder-Kit/main/Install-All-Scripts.sql"
+        response = requests.get(url, timeout=30)
+        response.raise_for_status()
+
+        sql_script = response.text
+
+        # Connect to database and execute the script
+        conn_str = build_connection_string(host, port, database, user, password)
+        with pyodbc.connect(conn_str, autocommit=True) as conn:
+            cur = conn.cursor()
+
+            # Split the script into individual statements
+            # Remove comments and split by GO statements (SQL Server batch separator)
+            statements = []
+            current_statement = []
+
+            for line in sql_script.split('\n'):
+                line = line.strip()
+                # Skip empty lines and comments
+                if not line or line.startswith('--') or line.startswith('/*'):
+                    continue
+
+                # Check for GO statement (batch separator)
+                if line.upper() == 'GO':
+                    if current_statement:
+                        statements.append('\n'.join(current_statement))
+                        current_statement = []
+                else:
+                    current_statement.append(line)
+
+            # Add the last statement if there's any
+            if current_statement:
+                statements.append('\n'.join(current_statement))
+
+            # Execute each statement
+            executed_count = 0
+            for statement in statements:
+                statement = statement.strip()
+                if statement:
+                    try:
+                        cur.execute(statement)
+                        executed_count += 1
+                    except Exception as e:
+                        # Log the error but continue with other statements
+                        print(f"Warning: Failed to execute statement: {e}")
+                        continue
+
+            return True, f"Successfully installed Blitz procedures. Executed {executed_count} statements."
+
+    except requests.RequestException as e:
+        return False, f"Failed to download installation script: {str(e)}"
+    except pyodbc.Error as e:
+        return False, f"Database error during installation: {str(e)}"
+    except Exception as e:
+        return False, f"Unexpected error during installation: {str(e)}"
+
 def get_connection():
     """
     Get a database connection using the centralized connection logic.
@@ -117,31 +216,32 @@ def get_connection():
                 raise ValueError("Failed to retrieve database connection even though the ID exists.")
         else:
             # Step 3: Database connection doesn't exist, create it
-            new_db_connection = db_dao.DatabaseConnection(
-                db_name=mssql_db,
-                db_user=mssql_user,
-                db_password=mssql_password,
-                db_host=mssql_host,
-                db_port=mssql_port
-            )
-
-            # Probe database for server metadata and attach if available
-            ver, mem_mb = probe_db_info(mssql_host, mssql_port, mssql_db, mssql_user, mssql_password)
-            new_db_connection.version = ver
-            new_db_connection.instance_memory_mb = mem_mb
-
-
-            # Insert the new connection and get the db_id
-            actual_db_id = db_dao.insert_db(new_db_connection)
-
-            # Use environment variables for connection
-            conn_str = build_connection_string(
+            temp_conn_str = build_connection_string(
                 mssql_host,
                 mssql_port,
                 mssql_db,
                 mssql_user,
                 mssql_password
             )
+            blitz_exists = check_blitz_procedures(mssql_host, mssql_port, mssql_db, mssql_user, mssql_password)
+            ver, mem_mb = probe_db_info(mssql_host, mssql_port, mssql_db, mssql_user, mssql_password)
+
+            new_db_connection = db_dao.DatabaseConnection(
+                db_name=mssql_db,
+                db_user=mssql_user,
+                db_password=mssql_password,
+                db_host=mssql_host,
+                db_port=mssql_port,
+                has_blitz_procedures=blitz_exists,
+                version=ver,
+                instance_memory_mb=mem_mb
+            )
+
+            # Insert the new connection and get the db_id
+            actual_db_id = db_dao.insert_db(new_db_connection)
+
+            # Use environment variables for connection
+            conn_str = temp_conn_str
 
         return pyodbc.connect(conn_str)
 
@@ -173,6 +273,54 @@ def get_actual_db_name():
     if db_connection:
         return db_connection.db_name
     return None
+
+def get_actual_db() -> Optional[db_dao.DatabaseConnection]:
+    """Get the DatabaseConnection object of the currently connected database"""
+    return db_dao.get_db(actual_db_id)
+
+def update_blitz_procedures_status(db_id: int) -> bool:
+    """
+    Check and update the has_blitz_procedures status for a database connection.
+
+    Args:
+        db_id: Database connection ID
+
+    Returns:
+        True if the status was updated successfully, False otherwise
+    """
+    try:
+        # Get the database connection details
+        db_connection = db_dao.get_db(db_id)
+        if not db_connection:
+            return False
+
+        # Check if Blitz procedures exist
+        has_blitz = check_blitz_procedures(
+            db_connection.db_host,
+            db_connection.db_port,
+            db_connection.db_name,
+            db_connection.db_user,
+            db_connection.db_password
+        )
+
+        # Update the database connection record
+        if has_blitz is not None:
+
+            # Update the record (we'll need to add an update function to db_DAO)
+            # For now, we'll delete and re-insert
+            from .connection_DAO import get_conn_ctx
+            with get_conn_ctx() as conn:
+                conn.execute(
+                    "UPDATE Database_connection SET has_blitz_procedures = ? WHERE db_id = ?",
+                    (int(has_blitz) if has_blitz is not None else None, db_id)
+                )
+            return True
+
+        return False
+
+    except Exception as e:
+        print(f"Error updating Blitz procedures status: {e}")
+        return False
 
 
 def safe_pretty_json(record: dict) -> dict:
