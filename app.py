@@ -197,19 +197,20 @@ def add_database():
         if not all([db_name, db_host, db_user, db_password]):
             raise ValueError("All fields are required")
 
+        version, instance_memory_mb = db_conn.probe_db_info(db_host, db_port, db_name, db_user, db_password)
+        has_blitz = db_conn.check_blitz_procedures(db_host, db_port, db_name, db_user, db_password)
+
         # Create new database connection
         new_connection = db_dao.DatabaseConnection(
             db_name=db_name,
             db_user=db_user,
             db_password=db_password,
             db_host=db_host,
-            db_port=db_port
+            db_port=db_port,
+            version=version,
+            instance_memory_mb=instance_memory_mb,
+            has_blitz_procedures=has_blitz
         )
-
-        # Attempt to probe server version and instance memory and attach to the record
-        version, instance_memory_mb = db_conn.probe_db_info(db_host, db_port, db_name, db_user, db_password)
-        new_connection.version = version
-        new_connection.instance_memory_mb = instance_memory_mb
 
         # Insert and set as active
         new_db_id = db_dao.insert_db(new_connection)
@@ -313,6 +314,42 @@ def delete_database():
         display_name = request.form.get("current_proc", "Blitz")
         return redirect_to_display_name(display_name)
 
+@app.route("/install_blitz_procedures", methods=["POST"])
+def install_blitz_procedures():
+    """Handle installing Blitz procedures for a database connection"""
+    try:
+        db_id = int(request.form.get("db_id"))
+
+        # Get the database connection details
+        db_connection = db_dao.get_db(db_id)
+        if not db_connection:
+            flash("Database connection not found.", "error")
+            return redirect(url_for('administration'))
+
+        # Install the Blitz procedures
+        success, message = db_conn.install_blitz_procedures(
+            db_connection.db_host,
+            db_connection.db_port,
+            db_connection.db_name,
+            db_connection.db_user,
+            db_connection.db_password
+        )
+
+        if success:
+            # Update the has_blitz_procedures status
+            if db_conn.update_blitz_procedures_status(db_id):
+                flash(f"Success! {message}", "success")
+            else:
+                flash(f"Procedures installed but failed to update status: {message}", "warning")
+        else:
+            flash(f"Installation failed: {message}", "error")
+
+        return redirect(url_for('administration'))
+
+    except (ValueError, Exception) as e:
+        flash(f"Error installing Blitz procedures: {str(e)}", "error")
+        return redirect(url_for('administration'))
+
 @app.route("/administration")
 def administration():
     """Database administration page"""
@@ -349,6 +386,10 @@ def procedure(display_name):
                            proc_name=display_name,
                            procedures=PROCEDURES,
                            actual_db_id=db_conn.get_actual_db_id())
+
+    if not db_conn.get_actual_db().has_blitz_procedures:
+        flash(f"The selected database does not have Blitz procedures installed. Please install them using Install Blitz button.", "error" )
+        return redirect(url_for('administration'))
 
     procedure_name = get_procedure_name(display_name)
     blitz_records = dao.get_all_records(procedure_name, db_conn.get_actual_db_id())

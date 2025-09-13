@@ -90,15 +90,28 @@
                                         {% endif %}
                                     </td>
                                     <td>
-                                        <button type="button" class="btn-copy" onclick="copyConnection('{{ conn.db_name }}', '{{ conn.db_host }}', '{{ conn.db_port }}', '{{ conn.db_user }}', '{{ conn.db_password }}')" title="Copy connection details to form">
-                                            Copy
-                                        </button>
-                                        <form method="POST" action="/delete_database" style="display: inline;"
-                                              onsubmit="return confirm('Are you sure you want to delete this connection? This will also clear all associated data.')">
-                                            <input type="hidden" name="current_proc" value="{{ proc_name }}">
-                                            <input type="hidden" name="db_id" value="{{ conn.db_id }}">
-                                            <button type="submit" class="btn-danger">Delete</button>
-                                        </form>
+                                        <div class="button-group">
+                                            <button type="button" class="btn-copy" onclick="copyConnection('{{ conn.db_name }}', '{{ conn.db_host }}', '{{ conn.db_port }}', '{{ conn.db_user }}', '{{ conn.db_password }}')" title="Copy connection details to form">
+                                                Copy
+                                            </button>
+
+                                            {% if not conn.has_blitz_procedures %}
+                                            <form method="POST" action="/install_blitz_procedures" style="display: inline;"
+                                                  onsubmit="return confirm('This will download and install Blitz procedures from the First Responder Kit. Continue?')">
+                                                <input type="hidden" name="db_id" value="{{ conn.db_id }}">
+                                                <button type="submit" class="btn-secondary" title="Download and install Blitz procedures">
+                                                    Install Blitz
+                                                </button>
+                                            </form>
+                                            {% endif %}
+
+                                            <form method="POST" action="/delete_database" style="display: inline;"
+                                                  onsubmit="return confirm('Are you sure you want to delete this connection? This will also clear all associated data.')">
+                                                <input type="hidden" name="current_proc" value="{{ proc_name }}">
+                                                <input type="hidden" name="db_id" value="{{ conn.db_id }}">
+                                                <button type="submit" class="btn-danger">Delete</button>
+                                            </form>
+                                        </div>
                                     </td>
                                 </tr>
                             {% endfor %}

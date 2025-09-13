@@ -282,6 +282,19 @@ button:hover {
     transform: none !important;
 }
 
+.button-group {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    align-items: flex-start;
+}
+
+.button-group button,
+.button-group form {
+    margin: 0 !important;
+    width: 100%;
+}
+
 /* Generic .btn used in templates for consistent button-like links */
 .btn {
     display: inline-block !important;
