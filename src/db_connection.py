@@ -344,6 +344,13 @@ def safe_pretty_json(record: dict) -> dict:
 
 def exec_more_info(record, index_records, finding_records):
     with get_connection() as sql_server_conn:
+        # Ensure stored procedures that perform writes run outside implicit transactions
+        try:
+            sql_server_conn.autocommit = True
+        except Exception:
+            # Some connection wrappers may not allow setting autocommit; ignore if so
+            pass
+
         cursor = sql_server_conn.cursor()
         cursor.execute(record.more_info)
 
@@ -443,16 +450,30 @@ def exec_blitz(procedure_name):
     db_connection = db_dao.get_db(get_actual_db_id())
     database_name = db_connection.db_name if db_connection else None
 
+
     with get_connection() as db_connection:
+        # Run the Blitz procedures with autocommit to avoid transaction/log write issues
+        try:
+            db_connection.autocommit = True
+        except Exception:
+            # If setting autocommit isn't supported just continue
+            pass
+
         cursor = db_connection.cursor()
 
-            # Add @DatabaseName parameter for sp_BlitzCache and sp_BlitzIndex
+        # Add @DatabaseName parameter for sp_BlitzCache and sp_BlitzIndex
+        # Quote database names safely to avoid SQL syntax issues
         if procedure_name == 'sp_BlitzCache' and database_name:
-            cursor.execute(f"EXEC {procedure_name} @DatabaseName = ?", (database_name,))
+            safe_db = database_name.replace("'", "''")
+            exec_str = f"EXEC {procedure_name} @DatabaseName = '{safe_db}'"
         elif procedure_name == 'sp_BlitzIndex' and database_name:
-            cursor.execute(f"EXEC {procedure_name} @IncludeInactiveIndexes=1, @Mode=4, @DatabaseName = ?", (database_name,))
+            safe_db = database_name.replace("'", "''")
+            exec_str = f"EXEC {procedure_name} @IncludeInactiveIndexes=1, @Mode=4, @DatabaseName = '{safe_db}'"
         else:
-            cursor.execute(f"EXEC {procedure_name}")
+            exec_str = f"EXEC {procedure_name}"
+
+        print(f"Executed on database: {exec_str}")
+        cursor.execute(exec_str)
 
         while cursor.description is None:
             if not cursor.nextset():
