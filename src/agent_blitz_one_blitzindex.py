@@ -12,7 +12,34 @@ from httpx import RemoteProtocolError
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.documents import Document
 from langchain_core.tools import tool
-from langchain.agents import AgentExecutor, create_tool_calling_agent
+
+# langchain has moved symbols across versions. Import with fallbacks so this
+# module works with multiple langchain releases (some expose AgentExecutor in
+# `langchain.agents`, others in `langchain.agents.agent`; similarly
+# create_tool_calling_agent can live in different submodules).
+try:
+    # Preferred modern import (if available)
+    from langchain.agents import AgentExecutor, create_tool_calling_agent
+except Exception:  # pragma: no cover - runtime-dependent
+    AgentExecutor = None
+    create_tool_calling_agent = None
+    try:
+        from langchain.agents.agent import AgentExecutor
+    except Exception:
+        try:
+            # older layouts
+            from langchain.agents.agent import AgentExecutor
+        except Exception:
+            pass
+
+    try:
+        from langchain.agents.tool_calling_agent.base import create_tool_calling_agent
+    except Exception:
+        try:
+            # alternate location
+            from langchain.agents.tool_calling_agent import create_tool_calling_agent
+        except Exception:
+            pass
 from langchain_openai import ChatOpenAI
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
@@ -181,9 +208,50 @@ llm = ChatOpenAI(
     streaming=False      # Disable streaming to avoid connection issues
 )
 
-# Agent
-agent = create_tool_calling_agent(llm=llm, tools=tools, prompt=prompt_template)
-agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True, max_iterations=2000)
+# Agent creation: different langchain versions expose different helpers. Try
+# preferred tool-calling helper first, then fall back to `initialize_agent`.
+agent = None
+agent_executor = None
+
+if create_tool_calling_agent is not None:
+    try:
+        agent = create_tool_calling_agent(llm=llm, tools=tools, prompt=prompt_template)
+    except Exception as e:  # pragma: no cover - environment-dependent
+        logger.warning("create_tool_calling_agent failed: %s", e)
+
+if agent is not None and AgentExecutor is not None:
+    try:
+        # Preferred constructor
+        agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True, max_iterations=2000)
+    except Exception:
+        try:
+            # Alternate helper method if available
+            agent_executor = AgentExecutor.from_agent_and_tools(agent=agent, tools=tools, verbose=True, max_iterations=2000)
+        except Exception as e:  # pragma: no cover - runtime-dependent
+            logger.warning("AgentExecutor construction failed: %s", e)
+
+if agent_executor is None:
+    # Try the older initialize_agent API
+    try:
+        from langchain.agents import initialize_agent, AgentType
+
+        try:
+            # initialize_agent often returns an AgentExecutor-like object
+            agent_executor = initialize_agent(llm, tools, agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION, verbose=True, max_iterations=2000)  # type: ignore[arg-type]
+        except TypeError:
+            # Some versions expect a string identifier for agent
+            agent_executor = initialize_agent(llm, tools, agent="zero-shot-react-description", verbose=True)  # type: ignore[arg-type]
+    except Exception as e:  # pragma: no cover - environment-dependent
+        logger.warning("initialize_agent not available or failed: %s", e)
+
+if agent_executor is None:
+    # Nothing worked - raise a helpful error so the user can pin dependencies.
+    raise ImportError(
+        "Could not create a LangChain agent with the installed langchain package. "
+        "This project expects a langchain version that provides `create_tool_calling_agent` "
+        "or `initialize_agent`. To fix, either install a compatible langchain release (for example, "
+        "pin `langchain==0.0.368` in requirements.txt) or update the code to match your langchain version."
+    )
 
 
 def execute(procedure: str, record_id: int, user_input: str, chat_history: list) -> dict:
