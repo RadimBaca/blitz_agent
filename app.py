@@ -492,7 +492,7 @@ def analyze(display_name, procedure_order):
             )
             chat_history.append(("ai", result["output"]))
             dao.store_chat_history(procedure_name, procedure_order, chat_history)
-            return redirect(url_for("analyze", display_name=display_name, rec_id=procedure_order))
+            return redirect(url_for("analyze", display_name=display_name, procedure_order=procedure_order))
 
         chat_history = dao.get_chat_history(procedure_name, procedure_order)
         if not chat_history:
