@@ -1,6 +1,8 @@
-# AI Agent Based on Brent Ozar's First Responder Scripts
+# Database Terapeut
 
-This is a AI agent that connects to your SQL Server instance and helps with database administration tasks.
+AI Agent Based on Brent Ozar's First Responder Scripts.
+
+This is an AI agent that connects to your SQL Server instance and helps with database administration tasks.
 It is a web application that runs in a Docker container and uses OpenAI LLM API.
 
 # Preparation
@@ -9,7 +11,7 @@ It is a web application that runs in a Docker container and uses OpenAI LLM API.
 
 This application connects to a SQL Server instance and runs [Brent Ozar's First Responder scripts](https://github.com/BrentOzarULTD/SQL-Server-First-Responder-Kit).
 Therefore, you need to have the scripts installed on your SQL Server instance.
-In order to install the First Responder Kit, you simply clone the repository and run the `Install-All-Scripts.sql` script against your SQL Server.
+To install the First Responder Kit, you clone the repository and run the `Install-All-Scripts.sql` script against your SQL Server.
 
 ```shell
 git clone https://github.com/BrentOzarULTD/SQL-Server-First-Responder-Kit
@@ -63,7 +65,7 @@ This creates a password file with username `admin` and password `TvojeSilneHeslo
 
 # Usage
 
-Docker needs to be installed on your system. Once everything is prepared you can simply build the image and run the container:
+Docker needs to be installed on your system. Once everything is prepared, you can build the image and run the container:
 
 ```sh
 docker-compose up --build
