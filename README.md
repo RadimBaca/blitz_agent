@@ -1,9 +1,12 @@
 # Database Terapeut
 
-AI Agent Based on Brent Ozar's First Responder Scripts.
-
-This is an AI agent that connects to your SQL Server instance and helps with database administration tasks.
+This is an AI agent that connects to your SQL Server instance and helps with database administration and performance tuning tasks.
 It is a web application that runs in a Docker container and uses OpenAI LLM API.
+
+You can run it localy.
+The AI agent does not need access to your DB data.
+
+![DB terapeut](img/SQLServer_terapeut.png)
 
 # Preparation
 
@@ -43,11 +46,16 @@ GO
 GRANT VIEW SERVER STATE TO username;
 ```
 
+**Disclaimer:** This user account is intended to be used by an AI agent for database access. It is strongly recommended not to grant full privileges to your database or database instance. Metadata read-only access is sufficient and access to DB data is not necessary. The authors assume no responsibility for any damage, data loss, security breach, or other harm resulting from incorrect configuration or improper use of this tool.
+
+
 ## Extra Directories and Files
 
 You need to create/prepare the following directories and files that are not part of the github repository:
-- `db` directory - containing the knowledge database used by the agent
+- `db` directory - containing the knowledge database and prompts used by the agent
 - `.env` file - containing the environment variables
+
+Send email to radim.baca@vsb.cz to obtain these.
 
 ## OpenAI API Key
 
